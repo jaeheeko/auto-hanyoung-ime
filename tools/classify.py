@@ -102,11 +102,41 @@ class Decision:
 
 
 class Classifier:
-    def __init__(self, ko: WordModel, en: WordModel, suffix_lm: CharLM, params: Params):
+    def __init__(self, ko: WordModel, en: WordModel, suffix_counts: Counter, params: Params):
         self.ko = ko
         self.en = en
-        self.suffix_lm = suffix_lm
         self.p = params
+        # 접미 n-gram은 작아서 카운트에서 바로 만든다. 개인 층 접미를 더해 다시 만들 수 있게 카운트를 보관한다.
+        self.suffix_counts = Counter(suffix_counts)
+        self.suffix_lm = self._build_suffix_lm()
+
+    def _build_suffix_lm(self) -> CharLM:
+        lm = CharLM(self.ko.lm.order)
+        words = sorted(self.suffix_counts)
+        lm.train(words, weights=[self.suffix_counts[w] for w in words])
+        return lm
+
+    def prune(self, min_count: float, ko_only: bool = False):
+        """모델 크기를 줄인다. n-gram 카운트와 어휘 사전에서 min_count 미만을 버린다.
+        ko_only면 한국어 쪽만 줄인다. 영어 사전은 가중치 0.2짜리 사전 단어가 통째로 날아가 재현율이 떨어진다."""
+        self.ko.lm.prune(min_count)
+        self.ko.prune(min_count)
+        if ko_only:
+            return
+        self.en.lm.prune(min_count)
+        self.en.prune(min_count)
+        self.suffix_counts = Counter({w: c for w, c in self.suffix_counts.items() if c >= min_count})
+        self.suffix_lm = self._build_suffix_lm()
+
+    def apply_personal(self, ko_counts=None, en_counts=None, suffix_counts=None):
+        """개인 층: 본인 문서에서 뽑은 어절 빈도를 사전에 더하고 접미 n-gram을 다시 만든다."""
+        if ko_counts:
+            self.ko.add_counts(ko_counts)
+        if en_counts:
+            self.en.add_counts(en_counts)
+        if suffix_counts:
+            self.suffix_counts.update(suffix_counts)
+            self.suffix_lm = self._build_suffix_lm()
 
     # --- 가설별 log P(keys | h). final=False는 조합 중(접두) 점수 ---
     @staticmethod
@@ -276,10 +306,6 @@ def train(train_rows, external_dir, order=5, params: Params = None, prior="estim
     lex_rows: n-gram은 건드리지 않고 어휘 사전에만 더할 행(개인 층). 본인 문서로 빠르게 개인화할 때 쓴다."""
     params = params or Params()
     ko_words, en_words, suffixes = count_words(train_rows)
-    ko_lex, en_extra = Counter(ko_words), Counter()
-    if lex_rows:
-        ko_extra, en_extra, _ = count_words(lex_rows)
-        ko_lex.update(ko_extra)
 
     ko_lm = CharLM(order)
     ko_lm.train(list(ko_words.elements()))
@@ -296,18 +322,17 @@ def train(train_rows, external_dir, order=5, params: Params = None, prior="estim
         en_lex[w] += params.dict_weight
     en_lm = CharLM(order)
     en_lm.train(list(en_lex.keys()), weights=list(en_lex.values()))
-    en_lex.update(en_extra)  # 개인 층 영어 어휘는 사전에만
-
-    suffix_lm = CharLM(order)
-    suffix_lm.train(list(suffixes.keys()), weights=list(suffixes.values()))
 
     if prior == "default":
         params.prior = {p: {l: math.log(v) for l, v in d.items()} for p, d in DEFAULT_PRIOR.items()}
     else:
         params.prior = estimate_prior(prior_rows or train_rows)
-    ko_model = WordModel(ko_lm, ko_lex, params.lex_lambda_ko)
+    ko_model = WordModel(ko_lm, ko_words, params.lex_lambda_ko)
     en_model = WordModel(en_lm, en_lex, params.lex_lambda_en, case_fold=True)
-    return Classifier(ko_model, en_model, suffix_lm, params)
+    clf = Classifier(ko_model, en_model, suffixes, params)
+    if lex_rows:
+        clf.apply_personal(*count_words(lex_rows))
+    return clf
 
 
 def _ko_tail_keys(token: str) -> str:
@@ -322,7 +347,7 @@ def save(clf: Classifier, path: str):
         pickle.dump({
             "ko_lm": clf.ko.lm.to_dict(), "ko_lex": clf.ko.lex,
             "en_lm": clf.en.lm.to_dict(), "en_lex": clf.en.lex,
-            "suffix_lm": clf.suffix_lm.to_dict(), "params": clf.p,
+            "suffix_counts": clf.suffix_counts, "params": clf.p,
         }, f)
 
 
@@ -332,7 +357,7 @@ def load(path: str) -> Classifier:
     p = d["params"]
     ko = WordModel(CharLM.from_dict(d["ko_lm"]), d["ko_lex"], p.lex_lambda_ko)
     en = WordModel(CharLM.from_dict(d["en_lm"]), d["en_lex"], p.lex_lambda_en, case_fold=True)
-    return Classifier(ko, en, CharLM.from_dict(d["suffix_lm"]), p)
+    return Classifier(ko, en, d["suffix_counts"], p)
 
 
 if __name__ == "__main__":

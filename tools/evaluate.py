@@ -86,8 +86,11 @@ def main():
                     help="estimate: --prior-from(없으면 --train)에서 전이 확률 추정, default: 내장 기본값")
     ap.add_argument("--prior-from", help="사전확률을 추정할 TSV (예: 본인 문서의 train.tsv)")
     ap.add_argument("--lex-from", help="n-gram은 그대로 두고 어휘 사전에만 더할 TSV (개인 층 실험)")
+    ap.add_argument("--prune", type=float, default=0, help="학습 뒤 이 값 미만인 카운트를 버린다 (모델 크기 축소)")
+    ap.add_argument("--prune-ko-only", action="store_true", help="가지치기를 한국어 n-gram·사전에만 적용")
     ap.add_argument("--no-prefix", action="store_true")
     ap.add_argument("--save", action="store_true")
+    ap.add_argument("--save-as", default=os.path.join(ROOT, "models", "hanyoung.pkl"))
     args = ap.parse_args()
 
     train_rows = read_tsv(args.train)
@@ -97,7 +100,13 @@ def main():
     t0 = time.time()
     clf = train(train_rows, os.path.join(ROOT, "data", "external"), order=args.order,
                 params=Params(lone_penalty=args.lone, mix_penalty=args.mix_penalty),
-                prior=args.prior, prior_rows=prior_rows, lex_rows=lex_rows)
+                prior=args.prior, prior_rows=prior_rows, lex_rows=None)
+    if args.prune:
+        clf.prune(args.prune, ko_only=args.prune_ko_only)
+    if lex_rows:
+        # 개인 층은 가지치기 뒤에 얹는다 (실제 제품과 같은 순서)
+        from classify import count_words
+        clf.apply_personal(*count_words(lex_rows))
     print(f"학습 데이터 {args.train}: KO {sum(1 for r in train_rows if r[1] == 'KO')}, "
           f"EN {sum(1 for r in train_rows if r[1] == 'EN')}, MIX {sum(1 for r in train_rows if r[1] == 'MIX')}")
     print(f"학습 {time.time() - t0:.1f}s, KO 어휘 {len(clf.ko.lex)}, EN 어휘 {len(clf.en.lex)}")
@@ -119,9 +128,9 @@ def main():
         print(f"  {c:4d}  {label:3} {token!r:>18} keys={keys!r:<14} → {plabel:3} {ptext!r}  margin={margin:.1f}")
 
     if args.save:
-        os.makedirs(os.path.join(ROOT, "models"), exist_ok=True)
-        save(clf, os.path.join(ROOT, "models", "hanyoung.pkl"))
-        print("저장: models/hanyoung.pkl")
+        os.makedirs(os.path.dirname(args.save_as), exist_ok=True)
+        save(clf, args.save_as)
+        print(f"저장: {args.save_as}")
 
 
 if __name__ == "__main__":

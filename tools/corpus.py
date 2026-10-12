@@ -94,7 +94,9 @@ def main():
     ap.add_argument("vault", metavar="FOLDER")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "data"))
     ap.add_argument("--test-ratio", type=float, default=0.2)
+    ap.add_argument("--exclude", default="", help="파일 이름에 이 문자열(쉼표 구분)이 들어가면 제외")
     args = ap.parse_args()
+    excludes = [e for e in args.exclude.split(",") if e]
 
     os.makedirs(args.out, exist_ok=True)
     counts = {"train": {}, "test": {}}
@@ -102,6 +104,8 @@ def main():
             open(os.path.join(args.out, "test.tsv"), "w") as ftest:
         for i, path in enumerate(sorted(md_files(args.vault))):
             rel = os.path.relpath(path, args.vault)
+            if any(e in os.path.basename(path) for e in excludes):
+                continue
             h = int(hashlib.md5(rel.encode()).hexdigest(), 16) % 1000
             split = "test" if h < args.test_ratio * 1000 else "train"
             f = ftest if split == "test" else ftrain

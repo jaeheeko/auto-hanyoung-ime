@@ -14,7 +14,7 @@ public enum Model {
         guard let p = json["params"] as? [String: Any],
               let koLM = json["ko_lm"] as? [String: Any],
               let enLM = json["en_lm"] as? [String: Any],
-              let sufLM = json["suffix_lm"] as? [String: Any],
+              let suffixRaw = json["suffix_counts"] as? [String: Any],
               let koLexRaw = json["ko_lex"] as? [String: Any],
               let enLexRaw = json["en_lex"] as? [String: Any] else {
             throw ModelError.malformed("sections")
@@ -52,6 +52,26 @@ public enum Model {
         let en = WordModel(lm: try CharLM(json: enLM), lex: lex(enLexRaw),
                            total: num(json["en_lex_total"], 0), lam: num(p["lex_lambda_en"], 0.5),
                            caseFold: true, foldWeight: num(p["fold_weight"], 0.3))
-        return Classifier(ko: ko, en: en, suffixLM: try CharLM(json: sufLM), params: params)
+        return Classifier(ko: ko, en: en, suffixCounts: lex(suffixRaw), params: params)
+    }
+
+    /// tools/personalize.py가 만든 개인 어휘 층. {"ko": {...}, "en": {...}, "suffix": {...}}
+    public struct PersonalLexicon {
+        public let ko: [String: Double]
+        public let en: [String: Double]
+        public let suffix: [String: Double]
+
+        public static func load(url: URL) throws -> PersonalLexicon {
+            let data = try Data(contentsOf: url)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw ModelError.malformed("user_lexicon")
+            }
+            func section(_ k: String) -> [String: Double] {
+                var d: [String: Double] = [:]
+                for (w, v) in (json[k] as? [String: Any]) ?? [:] { if let n = (v as? NSNumber)?.doubleValue { d[w] = n } }
+                return d
+            }
+            return PersonalLexicon(ko: section("ko"), en: section("en"), suffix: section("suffix"))
+        }
     }
 }

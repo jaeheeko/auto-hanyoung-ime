@@ -62,11 +62,11 @@
 				<key>tsInputModeScriptKey</key>
 				<string>smKorean</string>
 				<key>tsInputModeMenuIconFileKey</key>
-				<string>menu.png</string>
+				<string>menu.tiff</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>
-				<string>menu.png</string>
+				<string>menu.tiff</string>
 				<key>tsInputModePaletteIconFileKey</key>
-				<string>menu.png</string>
+				<string>menu.tiff</string>
 			</dict>
 		</dict>
 		<key>tsVisibleInputModeOrderedArrayKey</key>

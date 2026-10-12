@@ -49,7 +49,8 @@ def main():
         },
         "ko_lm": lm_json(clf.ko.lm, args.min_count),
         "en_lm": lm_json(clf.en.lm, args.min_count),
-        "suffix_lm": lm_json(clf.suffix_lm, args.min_count),
+        # 접미 n-gram은 카운트로 내보내고 Swift가 로드할 때 만든다 (개인 층 접미를 더할 수 있게)
+        "suffix_counts": lex_json(clf.suffix_counts, args.min_count),
         "ko_lex": lex_json(clf.ko.lex, args.min_count),
         "en_lex": lex_json(clf.en.lex, args.min_count),
         "ko_lex_total": clf.ko.total,

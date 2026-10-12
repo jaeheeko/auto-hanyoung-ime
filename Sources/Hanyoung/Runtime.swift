@@ -108,6 +108,20 @@ final class Runtime {
             fatalError("모델 로드 실패: \(error)")
         }
         log(["event": "model_loaded", "ms": Int(Date().timeIntervalSince(t0) * 1000)])
+
+        // 개인 층: tools/personalize.py가 만든 어휘 사전이 있으면 기본 모델에 더한다
+        let lexURL = supportDir.appendingPathComponent("user_lexicon.json")
+        if FileManager.default.fileExists(atPath: lexURL.path) {
+            do {
+                let t1 = Date()
+                let personal = try Model.PersonalLexicon.load(url: lexURL)
+                classifier.applyPersonal(ko: personal.ko, en: personal.en, suffix: personal.suffix)
+                log(["event": "personal_loaded", "ko": personal.ko.count, "en": personal.en.count,
+                     "suffix": personal.suffix.count, "ms": Int(Date().timeIntervalSince(t1) * 1000)])
+            } catch {
+                log(["event": "personal_failed", "error": "\(error)"])
+            }
+        }
     }
 
     /// 로컬 JSONL 로그. 비밀번호란에서는 입력기 자체가 호출되지 않는다.

@@ -46,19 +46,38 @@ public struct Decision {
 public final class Classifier {
     public let ko: WordModel
     public let en: WordModel
-    public let suffixLM: CharLM
+    public private(set) var suffixLM: CharLM
     public var params: Params
     private let jamoTotal: Double
+    /// 접미(조사·어미) 빈도. 접미 n-gram은 작아서 여기서 바로 만들고, 개인 층을 더하면 다시 만든다.
+    private var suffixCounts: [String: Double]
 
     /// 음절 뒤·앞에 반복돼 붙는 자모 (ㅋ ㅎ ㅠ ㅜ)
     static let emoticonRunKeys: Set<Character> = Set("zgbn")
 
-    init(ko: WordModel, en: WordModel, suffixLM: CharLM, params: Params) {
+    init(ko: WordModel, en: WordModel, suffixCounts: [String: Double], params: Params) {
         self.ko = ko
         self.en = en
-        self.suffixLM = suffixLM
         self.params = params
         self.jamoTotal = params.jamoLex.values.reduce(0, +)
+        self.suffixCounts = suffixCounts
+        self.suffixLM = Classifier.buildSuffixLM(suffixCounts, order: ko.lm.order)
+    }
+
+    private static func buildSuffixLM(_ counts: [String: Double], order: Int) -> CharLM {
+        let lm = CharLM(order: order)
+        lm.train(counts)
+        return lm
+    }
+
+    /// 개인 층: 본인 문서에서 뽑은 어절 빈도를 사전에 더하고 접미 n-gram을 다시 만든다.
+    public func applyPersonal(ko koCounts: [String: Double], en enCounts: [String: Double], suffix: [String: Double]) {
+        ko.addCounts(koCounts)
+        en.addCounts(enCounts)
+        if !suffix.isEmpty {
+            for (w, c) in suffix { suffixCounts[w, default: 0] += c }
+            suffixLM = Classifier.buildSuffixLM(suffixCounts, order: ko.lm.order)
+        }
     }
 
     private static func trailingLoneCho(_ keys: String, _ text: String) -> Bool {

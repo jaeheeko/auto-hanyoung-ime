@@ -9,7 +9,13 @@ public final class CharLM {
     private var counts: [String: [Character: Double]] = [:]
     private var totals: [String: Double] = [:]
     private var types: [String: Double] = [:]
-    private let vsize: Double
+    private var vocab: Set<Character> = []
+    private var vsize: Double = 1
+
+    /// 빈 모델. train(_:)으로 채운다.
+    public init(order: Int) {
+        self.order = order
+    }
 
     init(json: [String: Any]) throws {
         guard let order = json["order"] as? Int,
@@ -18,20 +24,40 @@ public final class CharLM {
             throw ModelError.malformed("CharLM")
         }
         self.order = order
-        self.vsize = Double(vocab.count) + 1
+        self.vocab = Set(vocab)
         counts.reserveCapacity(raw.count)
         for (ctx, followers) in raw {
             var c: [Character: Double] = [:]
-            var total = 0.0
             for (k, v) in followers {
                 guard let ch = k.first, let n = (v as? NSNumber)?.doubleValue else { continue }
                 c[ch] = n
-                total += n
             }
             counts[ctx] = c
-            totals[ctx] = total
-            types[ctx] = Double(c.count)
         }
+        finalize()
+    }
+
+    /// 어절 빈도로 학습한다. tools/lm.py CharLM.train과 같은 카운트를 만든다.
+    public func train(_ words: [String: Double]) {
+        let pad = [Character](repeating: CharLM.bos, count: order - 1)
+        for (w, wt) in words {
+            let s = pad + Array(w) + [CharLM.eos]
+            for i in (order - 1)..<s.count {
+                let ch = s[i]
+                vocab.insert(ch)
+                for k in 0..<order {
+                    let ctx = String(s[(i - k)..<i])
+                    counts[ctx, default: [:]][ch, default: 0] += wt
+                }
+            }
+        }
+        finalize()
+    }
+
+    private func finalize() {
+        totals = counts.mapValues { $0.values.reduce(0, +) }
+        types = counts.mapValues { Double($0.count) }
+        vsize = Double(vocab.count) + 1
     }
 
     func prob(ctx: ArraySlice<Character>, ch: Character) -> Double {
@@ -62,8 +88,8 @@ public final class CharLM {
 /// 어휘 사전(빈도)과 문자 n-gram을 혼합한 어절 확률.
 public final class WordModel {
     public let lm: CharLM
-    let lex: [String: Double]
-    let total: Double
+    private(set) var lex: [String: Double]
+    private(set) var total: Double
     let lam: Double
     let caseFold: Bool
     let foldWeight: Double
@@ -75,6 +101,12 @@ public final class WordModel {
         self.lam = lam
         self.caseFold = caseFold
         self.foldWeight = foldWeight
+    }
+
+    /// 개인 층: 어휘 사전에 빈도를 더한다. n-gram은 건드리지 않는다.
+    public func addCounts(_ counts: [String: Double]) {
+        for (w, c) in counts { lex[w, default: 0] += c }
+        total = lex.values.reduce(0, +)
     }
 
     private func prob(_ word: String, eos: Bool) -> Double {

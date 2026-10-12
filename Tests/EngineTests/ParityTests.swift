@@ -59,6 +59,18 @@ final class ParityTests: XCTestCase {
         XCTAssertGreaterThan(n, 100)
     }
 
+    func testPersonalOverlay() throws {
+        try requireModel()
+        // 개인 층은 공유 분류기를 바꾸므로 따로 로드한다
+        let clf = try Model.load(url: Self.modelURL)
+        let rare = "qjwmqlf"  // 버즈빌: 기본 모델에는 없거나 드문 어절
+        let before = clf.decide(rare, prev: "KO").scores[.ko]!
+        clf.applyPersonal(ko: [rare: 500], en: ["Buzzvil": 300], suffix: ["dptjsms": 20])
+        let after = clf.decide(rare, prev: "KO").scores[.ko]!
+        XCTAssertGreaterThan(after, before, "개인 사전에 더한 어절의 KO 점수가 올라야 한다")
+        XCTAssertEqual(clf.decide("Buzzvildptjsms", prev: "KO").text, "Buzzvil에서는")
+    }
+
     func testDecideSpeed() throws {
         try requireModel()
         let clf = Self.classifier

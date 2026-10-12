@@ -30,6 +30,16 @@ class CharLM:
                     self.counts[ctx][ch] += wt
         self._finalize()
 
+    def prune(self, min_count: float):
+        """min_count 미만인 카운트를 버린다. 모델 크기를 줄이기 위한 것."""
+        for ctx in list(self.counts):
+            kept = Counter({ch: v for ch, v in self.counts[ctx].items() if v >= min_count})
+            if kept:
+                self.counts[ctx] = kept
+            else:
+                del self.counts[ctx]
+        self._finalize()
+
     def _finalize(self):
         self.totals = {ctx: sum(c.values()) for ctx, c in self.counts.items()}
         self.types = {ctx: len(c) for ctx, c in self.counts.items()}
@@ -87,6 +97,16 @@ class WordModel:
         # 영어: `Then`, `API`처럼 대문자가 섞인 단어는 소문자형으로도 조회한다 (가중치 0.3)
         self.case_fold = case_fold
         self.fold_weight = 0.3
+
+    def prune(self, min_count: float):
+        self.lex = Counter({w: c for w, c in self.lex.items() if c >= min_count})
+        self.total = sum(self.lex.values())
+
+    def add_counts(self, counts):
+        """개인 층: 어휘 사전에 빈도를 더한다. n-gram은 건드리지 않는다."""
+        for w, c in counts.items():
+            self.lex[w] = self.lex.get(w, 0) + c
+        self.total = sum(self.lex.values())
 
     def _prob(self, word: str, eos: bool) -> float:
         p_ng = math.exp(self.lm.logprob(word, eos))
