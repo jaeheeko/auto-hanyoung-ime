@@ -1,0 +1,4 @@
+/* 입력 소스 목록에 보이는 이름. 키는 Info.plist의 입력 모드 ID */
+"CFBundleDisplayName" = "Auto HanYoung";
+"com.jerryko.inputmethod.Hanyoung" = "Auto HanYoung";
+"com.jerryko.inputmethod.Hanyoung.auto" = "Auto HanYoung";

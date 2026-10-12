@@ -1,0 +1,4 @@
+/* Names shown in the input source list. Keys are input mode IDs from Info.plist */
+"CFBundleDisplayName" = "Auto HanYoung";
+"com.jerryko.inputmethod.Hanyoung" = "Auto HanYoung";
+"com.jerryko.inputmethod.Hanyoung.auto" = "Auto HanYoung";
