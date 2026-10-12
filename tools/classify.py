@@ -15,6 +15,19 @@ from lm import CharLM, WordModel  # noqa: E402
 
 LABELS = ("KO", "EN", "MIX")
 
+# 직전 라벨 → 다음 라벨 확률. 한국어 쪽으로 강하게 둔다.
+# 영어 단어는 n-gram·사전 증거가 강해 사전확률이 낮아도 영어로 판정되고(재현율 99.95%),
+# 새/to, 해/go 같은 양의성 어절만 한국어로 기운다. 사용자 문서 비율(영어 9%)로 추정하면 오히려 나빠졌다(99.97 → 99.89%).
+# 영어 위주 앱은 앱별 가중치(appBias)로 보정한다.
+DEFAULT_PRIOR = {
+    "BR": {"KO": 0.98, "EN": 0.011, "MIX": 0.009},
+    "KO": {"KO": 0.993, "EN": 0.004, "MIX": 0.003},
+    "EN": {"KO": 0.54, "EN": 0.35, "MIX": 0.11},
+    "MIX": {"KO": 0.93, "EN": 0.035, "MIX": 0.035},
+}
+# 영어 빈도표(en_50k)에 주는 총 가중치. 학습 문서의 영어 토큰 수가 적거나 없어도 영어 모델이 서도록 절대값으로 둔다.
+EN_FREQ_MIN_MASS = 100_000
+
 # 자모 관용 표현. vault(노트)에는 거의 없어 손으로 심는다. 키열 → 상대 빈도.
 # 반복은 2개로 접어서 조회하므로 ㅋㅋㅋㅋ도 "zz"에 해당한다.
 JAMO_LEXICON = {
@@ -241,10 +254,10 @@ def load_dict_words(path="/usr/share/dict/words"):
     return words
 
 
-def train(train_rows, external_dir, order=5, params: Params = None):
-    params = params or Params()
+def count_words(rows):
+    """TSV 행 → (KO 어절, EN 단어, MIX 접미) 빈도."""
     ko_words, en_words, suffixes = Counter(), Counter(), Counter()
-    for _, label, token, keys in train_rows:
+    for _, label, token, keys in rows:
         if label == "KO":
             ko_words[keys] += 1
         elif label == "EN":
@@ -254,6 +267,19 @@ def train(train_rows, external_dir, order=5, params: Params = None):
             prefix_len = len(keys) - len(_ko_tail_keys(token))
             en_words[keys[:prefix_len]] += 1
             suffixes[keys[prefix_len:]] += 1
+    return ko_words, en_words, suffixes
+
+
+def train(train_rows, external_dir, order=5, params: Params = None, prior="estimate", prior_rows=None,
+          lex_rows=None):
+    """prior: "estimate"면 prior_rows(없으면 train_rows)에서 전이 확률을 추정, "default"면 DEFAULT_PRIOR.
+    lex_rows: n-gram은 건드리지 않고 어휘 사전에만 더할 행(개인 층). 본인 문서로 빠르게 개인화할 때 쓴다."""
+    params = params or Params()
+    ko_words, en_words, suffixes = count_words(train_rows)
+    ko_lex, en_extra = Counter(ko_words), Counter()
+    if lex_rows:
+        ko_extra, en_extra, _ = count_words(lex_rows)
+        ko_lex.update(ko_extra)
 
     ko_lm = CharLM(order)
     ko_lm.train(list(ko_words.elements()))
@@ -262,19 +288,24 @@ def train(train_rows, external_dir, order=5, params: Params = None):
     en_freq = load_en_frequency(os.path.join(external_dir, "en_50k.txt"))
     en_lex = Counter(en_words)
     if en_freq:
-        scale = sum(en_words.values()) * 3 / sum(en_freq.values())
+        mass = max(sum(en_words.values()) * 3, EN_FREQ_MIN_MASS)
+        scale = mass / sum(en_freq.values())
         for w, c in en_freq.items():
             en_lex[w] += max(1, int(c * scale))
     for w in load_dict_words():
         en_lex[w] += params.dict_weight
     en_lm = CharLM(order)
     en_lm.train(list(en_lex.keys()), weights=list(en_lex.values()))
+    en_lex.update(en_extra)  # 개인 층 영어 어휘는 사전에만
 
     suffix_lm = CharLM(order)
     suffix_lm.train(list(suffixes.keys()), weights=list(suffixes.values()))
 
-    params.prior = estimate_prior(train_rows)
-    ko_model = WordModel(ko_lm, ko_words, params.lex_lambda_ko)
+    if prior == "default":
+        params.prior = {p: {l: math.log(v) for l, v in d.items()} for p, d in DEFAULT_PRIOR.items()}
+    else:
+        params.prior = estimate_prior(prior_rows or train_rows)
+    ko_model = WordModel(ko_lm, ko_lex, params.lex_lambda_ko)
     en_model = WordModel(en_lm, en_lex, params.lex_lambda_en, case_fold=True)
     return Classifier(ko_model, en_model, suffix_lm, params)
 

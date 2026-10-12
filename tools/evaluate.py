@@ -80,15 +80,26 @@ def main():
     ap.add_argument("--context", choices=["gold", "pred", "none"], default="pred")
     ap.add_argument("--lone", type=float, default=4.0)
     ap.add_argument("--mix-penalty", type=float, default=3.0)
+    ap.add_argument("--train", default=os.path.join(ROOT, "data", "train.tsv"), help="학습 TSV (corpus.py 출력)")
+    ap.add_argument("--test", default=os.path.join(ROOT, "data", "test.tsv"))
+    ap.add_argument("--prior", choices=["estimate", "default"], default="estimate",
+                    help="estimate: --prior-from(없으면 --train)에서 전이 확률 추정, default: 내장 기본값")
+    ap.add_argument("--prior-from", help="사전확률을 추정할 TSV (예: 본인 문서의 train.tsv)")
+    ap.add_argument("--lex-from", help="n-gram은 그대로 두고 어휘 사전에만 더할 TSV (개인 층 실험)")
     ap.add_argument("--no-prefix", action="store_true")
     ap.add_argument("--save", action="store_true")
     args = ap.parse_args()
 
-    train_rows = read_tsv(os.path.join(ROOT, "data", "train.tsv"))
-    test_rows = read_tsv(os.path.join(ROOT, "data", "test.tsv"))
+    train_rows = read_tsv(args.train)
+    test_rows = read_tsv(args.test)
+    prior_rows = read_tsv(args.prior_from) if args.prior_from else None
+    lex_rows = read_tsv(args.lex_from) if args.lex_from else None
     t0 = time.time()
     clf = train(train_rows, os.path.join(ROOT, "data", "external"), order=args.order,
-                params=Params(lone_penalty=args.lone, mix_penalty=args.mix_penalty))
+                params=Params(lone_penalty=args.lone, mix_penalty=args.mix_penalty),
+                prior=args.prior, prior_rows=prior_rows, lex_rows=lex_rows)
+    print(f"학습 데이터 {args.train}: KO {sum(1 for r in train_rows if r[1] == 'KO')}, "
+          f"EN {sum(1 for r in train_rows if r[1] == 'EN')}, MIX {sum(1 for r in train_rows if r[1] == 'MIX')}")
     print(f"학습 {time.time() - t0:.1f}s, KO 어휘 {len(clf.ko.lex)}, EN 어휘 {len(clf.en.lex)}")
     print("사전확률(log):", {k: {l: round(v, 2) for l, v in d.items()} for k, d in clf.p.prior.items()})
 
