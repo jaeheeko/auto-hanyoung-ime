@@ -1,0 +1,12 @@
+# 학습 데이터·모델: 사용자의 문서 어휘가 들어가므로 저장소에 올리지 않는다
+data/
+models/
+# 모델에 따라 달라지는 판정 벡터 (tools/make_vectors.py로 로컬 생성)
+Tests/vectors/decide.tsv
+
+build/
+.build/
+DerivedData/
+*.xcuserdata
+__pycache__/
+.DS_Store
