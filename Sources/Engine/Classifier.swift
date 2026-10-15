@@ -92,6 +92,22 @@ public final class Classifier {
         }
     }
 
+    /// 사용자가 고친 어절을 어휘 사전 덧층에 더한다. 키열 단위 사용자 사전과 달리 조사가 붙은 변형(html에서)에도
+    /// 영향을 준다. 대문자가 섞인 영어는 대소문자 접기(case fold)로 소문자형을 찾으므로 소문자 변형도 함께 덮인다.
+    /// 반대로 소문자형은 더하지 않는다: `SK`를 영어로 고쳤다고 `sk`(나)까지 영어가 되면 안 된다.
+    /// MIX는 영어 접두만 더한다(한국어 꼬리는 조사가 아닐 수 있어 접미 사전에 넣지 않는다).
+    public func learn(keys: String, label: Label, split: Int? = nil, weight: Double = 20) {
+        switch label {
+        case .en:
+            en.addCounts([keys: weight])
+        case .ko:
+            ko.addCounts([Classifier.canon(keys): weight])
+        case .mix:
+            let i = split ?? mixLoglik(keys, final: true).2
+            if i > 0 { en.addCounts([String(keys.prefix(i)): weight]) }
+        }
+    }
+
     private static func trailingLoneCho(_ keys: String, _ text: String) -> Bool {
         guard let last = keys.last, let j = Hangul.jamoOfKey(last), Hangul.consonants.contains(j),
               let t = text.last, Hangul.isCompatJamo(t) else { return false }

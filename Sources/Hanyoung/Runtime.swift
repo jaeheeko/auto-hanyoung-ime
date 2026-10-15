@@ -27,6 +27,8 @@ struct Config {
     /// 79 = F18(hidutil·Karabiner로 오른쪽 ⌘를 한/영 키로 바꿔 쓰는 흔한 설정. 일반 키는 keyDown에서 바로 되돌리기)
     var toggleKeyCodes: Set<UInt16> = [54, 79]
     /// 사용자 사전 1회 학습당 가중치, 최대 횟수
+    /// 교정 1회가 어휘 덧층에 더하는 빈도. 영어 사전 총량 46만 기준 20이면 log 확률 약 -10 (흔한 단어 수준).
+    static let learnWeight = 20.0
     var userDictWeight = 10.0   // 교정 1회로 격차 10점까지 뒤집힌다. 실사용 오판 격차는 1~17점.
     var userDictMaxCount = 3
 
@@ -51,7 +53,7 @@ struct Config {
 
 /// 되돌리기로 학습한 (키 문자열 → 라벨 → 횟수). JSON으로 저장.
 final class UserDict {
-    private var entries: [String: [String: Int]] = [:]
+    private(set) var entries: [String: [String: Int]] = [:]
     private let url: URL
 
     init(url: URL) {
@@ -63,9 +65,19 @@ final class UserDict {
     }
 
     func bias(for keys: String, weight: Double, maxCount: Int) -> [Label: Double] {
-        guard let e = entries[keys] else { return [:] }
         var d: [Label: Double] = [:]
-        for (l, c) in e { if let label = Label(rawValue: l) { d[label] = Double(min(c, maxCount)) * weight } }
+        if let e = entries[keys] {
+            for (l, c) in e { if let label = Label(rawValue: l) { d[label] = Double(min(c, maxCount)) * weight } }
+        }
+        // 영어로 배운 단어 뒤에 한글로 조립되는 꼬리가 붙었으면(db→db에서) 영어+조사 가설에 같은 편향을 준다.
+        // 어휘 덧층만으로는 `유에서`처럼 진짜 한국어 어절과 겹치는 경우를 못 뒤집는다.
+        var best = 0
+        for (w, e) in entries where keys.count > w.count && keys.hasPrefix(w) {
+            guard let c = e[Label.en.rawValue], c > 0 else { continue }
+            let tail = Hangul.compose(String(keys.dropFirst(w.count)))
+            if tail.lone == 0 && tail.shiftBad == 0 { best = max(best, c) }
+        }
+        if best > 0 { d[.mix, default: 0] += Double(min(best, maxCount)) * weight }
         return d
     }
 
@@ -124,6 +136,20 @@ final class Runtime {
                 log(["event": "personal_failed", "error": "\(error)"])
             }
         }
+        // 교정 학습 사전을 어휘 덧층에도 되살린다 (조사 변형·대소문자 변형까지 일반화)
+        for (keys, counts) in userDict.entries {
+            for (l, c) in counts where c > 0 {
+                if let label = Label(rawValue: l) {
+                    classifier.learn(keys: keys, label: label, weight: Config.learnWeight * Double(min(c, config.userDictMaxCount)))
+                }
+            }
+        }
+    }
+
+    /// 사용자가 고친 어절을 학습한다: 키열 사전(판정 편향)과 어휘 덧층(일반화) 둘 다.
+    func learn(_ keys: String, _ label: Label, split: Int? = nil) {
+        userDict.learn(keys, label)
+        classifier.learn(keys: keys, label: label, split: split, weight: Config.learnWeight)
     }
 
     /// 로컬 JSONL 로그. 비밀번호란에서는 입력기 자체가 호출되지 않는다.

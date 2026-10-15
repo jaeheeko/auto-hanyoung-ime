@@ -71,6 +71,23 @@ final class ParityTests: XCTestCase {
         XCTAssertEqual(clf.decide("Buzzvildptjsms", prev: "KO").text, "Buzzvil에서는")
     }
 
+    func testLearnGeneralizes() throws {
+        try requireModel()
+        let clf = try Model.load(url: Self.modelURL)
+        // 영어 교정 한 번이 조사 변형과 대문자 변형에도 미쳐야 한다
+        let w = "qlx"  // 기본 모델에 없는 영어 약어라고 치자 (한국어 가설 '빝'과 경쟁)
+        XCTAssertNotEqual(clf.decide(w).label, .en, "학습 전에는 영어가 아니어야 실험이 의미 있다")
+        clf.learn(keys: w, label: .en)
+        XCTAssertEqual(clf.decide(w).label, .en)
+        XCTAssertEqual(clf.decide(w + "dptj").text, "qlx에서")
+        XCTAssertEqual(clf.decide("QLX").label, .en, "대소문자 접기로 대문자형도 영어")
+        // 대문자 영어를 배워도 소문자형(sk=나)은 건드리지 않는다
+        let ko = clf.decide("sk").text
+        clf.learn(keys: "SK", label: .en)
+        XCTAssertEqual(clf.decide("sk").text, ko)
+        XCTAssertEqual(clf.decide("SKvmffoslt").text, "SK플래닛")
+    }
+
     func testDecideSpeed() throws {
         try requireModel()
         let clf = Self.classifier

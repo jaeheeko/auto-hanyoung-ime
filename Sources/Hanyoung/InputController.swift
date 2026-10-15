@@ -245,12 +245,12 @@ public final class HanyoungInputController: IMKInputController {
             lastCommit = (text, keys, last)
             // 되돌리기·가르기 취소로 모델과 다른 결과가 됐으면 사용자가 결과를 보고 고친 것이니 학습한다.
             // 어절 사이 한 번 톡(힌트)은 옛 습관으로 누른 것일 수 있어(menubar→ㅡ두ㅕㅠㅁㄱ) 학습하지 않는다.
-            if forced != nil, !forcedByHint, let m = model, m != last { runtime.userDict.learn(keys, last) }
+            if forced != nil, !forcedByHint, let m = model, m != last { runtime.learn(keys, last) }
         } else {
             lastCommit = nil
             // 영어|한국어로 가른 어절은 혼합 어절로 학습한다
             if segments.count == 2, segments[0].label == .en, segments[1].label == .ko {
-                runtime.userDict.learn(keys, .mix)
+                runtime.learn(keys, .mix, split: segments[0].keys.count)
             }
         }
         runtime.log(["event": "commit", "app": client.bundleIdentifier() ?? "", "keys": keys,
@@ -350,7 +350,7 @@ public final class HanyoungInputController: IMKInputController {
         lastCommit = (newText, keys, newLabel)
         prevLabel = newLabel
         lastTail = Self.tail(newLabel)
-        runtime.userDict.learn(keys, newLabel)
+        runtime.learn(keys, newLabel)
         runtime.log(["event": "undo", "app": client.bundleIdentifier() ?? "", "keys": keys,
                      "from": from.rawValue, "to": newLabel.rawValue, "text": newText])
     }
@@ -399,7 +399,7 @@ public final class HanyoungInputController: IMKInputController {
         flush()
         guard out != text else { return }
         client.insertText(out, replacementRange: range)
-        for l in learned { runtime.userDict.learn(l.keys, l.label) }
+        for l in learned { runtime.learn(l.keys, l.label) }
         if learned.count == 1, let l = learned.first, out == l.text {
             // 어절 하나를 바꿨으면 연타로 다음 가설까지 돌 수 있게 기억한다
             lastCommit = (l.text, l.keys, l.label)
