@@ -27,7 +27,7 @@ struct Config {
     /// 79 = F18(hidutil·Karabiner로 오른쪽 ⌘를 한/영 키로 바꿔 쓰는 흔한 설정. 일반 키는 keyDown에서 바로 되돌리기)
     var toggleKeyCodes: Set<UInt16> = [54, 79]
     /// 사용자 사전 1회 학습당 가중치, 최대 횟수
-    var userDictWeight = 3.0
+    var userDictWeight = 10.0   // 교정 1회로 격차 10점까지 뒤집힌다. 실사용 오판 격차는 1~17점.
     var userDictMaxCount = 3
 
     static func load(from url: URL) -> Config {

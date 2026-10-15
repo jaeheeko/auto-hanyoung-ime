@@ -22,6 +22,8 @@ public struct Params {
     public var minPrefix = 1
     public var mixPenalty = 3.0
     public var suffixLambda = 0.7
+    /// 접미에 조사·어미 사전(2회 이상)에 없는 음절이 있으면 벌점 (h싀, i홋 억제)
+    public var suffixOOVPenalty = 8.0
     /// 자모 관용 표현(ㅋㅋ 등): 전체 어절 중 비중, 음절에 반복 자모가 붙을 확률, 3개째부터 글자당 비용
     public var jamoMass = 0.01
     public var runAttachProb = 0.02
@@ -51,6 +53,8 @@ public final class Classifier {
     private let jamoTotal: Double
     /// 접미(조사·어미) 빈도. 접미 n-gram은 작아서 여기서 바로 만들고, 개인 층을 더하면 다시 만든다.
     private var suffixCounts: [String: Double]
+    /// 2회 이상 나온 접미를 조립한 음절 목록. 여기 없는 음절이 접미에 나오면 벌점.
+    private var suffixSyllables: Set<Character> = []
 
     /// 음절 뒤·앞에 반복돼 붙는 자모 (ㅋ ㅎ ㅠ ㅜ)
     static let emoticonRunKeys: Set<Character> = Set("zgbn")
@@ -62,12 +66,19 @@ public final class Classifier {
         self.jamoTotal = params.jamoLex.values.reduce(0, +)
         self.suffixCounts = suffixCounts
         self.suffixLM = Classifier.buildSuffixLM(suffixCounts, order: ko.lm.order)
+        self.suffixSyllables = Classifier.syllables(of: suffixCounts)
     }
 
     private static func buildSuffixLM(_ counts: [String: Double], order: Int) -> CharLM {
         let lm = CharLM(order: order)
         lm.train(counts)
         return lm
+    }
+
+    private static func syllables(of counts: [String: Double]) -> Set<Character> {
+        var s: Set<Character> = []
+        for (w, c) in counts where c >= 2 { s.formUnion(Hangul.compose(w).text) }
+        return s
     }
 
     /// 개인 층: 본인 문서에서 뽑은 어절 빈도를 사전에 더하고 접미 n-gram을 다시 만든다.
@@ -77,6 +88,7 @@ public final class Classifier {
         if !suffix.isEmpty {
             for (w, c) in suffix { suffixCounts[w, default: 0] += c }
             suffixLM = Classifier.buildSuffixLM(suffixCounts, order: ko.lm.order)
+            suffixSyllables = Classifier.syllables(of: suffixCounts)
         }
     }
 
@@ -171,7 +183,12 @@ public final class Classifier {
         if lone > 0 || c.shiftBad > 0 { return (-.infinity, c.text) }
         let pSuf = exp(suffixLM.logprob(suffix, eos: final))
         let pNg = exp(ko.logprobNgram(suffix, eos: final))
-        return (log(params.suffixLambda * pSuf + (1 - params.suffixLambda) * pNg), c.text)
+        var lp = log(params.suffixLambda * pSuf + (1 - params.suffixLambda) * pNg)
+        // 조합 중 말미의 초성은 아직 음절이 아니니 빼고 본다
+        var body = Substring(c.text)
+        if !final { while let t = body.last, Hangul.consonants.contains(t) { body.removeLast() } }
+        if body.contains(where: { !suffixSyllables.contains($0) }) { lp -= params.suffixOOVPenalty }
+        return (lp, c.text)
     }
 
     func mixLoglik(_ keys: String, final: Bool) -> (Double, String, Int) {

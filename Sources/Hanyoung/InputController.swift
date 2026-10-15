@@ -16,6 +16,7 @@ public final class HanyoungInputController: IMKInputController {
     private var fixed: [Segment] = []             // 앞서 가른 구간들
     private var displayed: Label? = nil           // 현재 구간을 marked text로 보여 주는 가설
     private var forced: Set<Label>? = nil         // 현재 구간에 허용된 가설 (되돌리기 키·힌트로 제한)
+    private var forcedByHint = false              // forced가 어절 사이 한 번 톡(힌트)에서 왔는지. 습관 누름일 수 있어 학습하지 않는다
     private var pendingAllowed: Set<Label>? = nil // 빈 상태에서 톡: 다음 어절이 시작할 언어
     private var prevLabel: Label? = nil           // 직전 어절 라벨 (문맥 사전확률)
     private var lastTail: Label = .ko             // 마지막 어절이 끝난 언어. 한/영 힌트의 기준
@@ -125,6 +126,7 @@ public final class HanyoungInputController: IMKInputController {
         }
         if Self.isWordChar(ch) {
             if buffer.isEmpty, fixed.isEmpty, let p = pendingAllowed {
+                forcedByHint = true
                 // 한/영 힌트가 걸려 있으면 새 어절은 그 언어로 시작한다
                 forced = p
                 pendingAllowed = nil
@@ -241,8 +243,9 @@ public final class HanyoungInputController: IMKInputController {
         lastTail = Self.tail(last)
         if segments.count == 1 {
             lastCommit = (text, keys, last)
-            // 힌트·고정으로 모델과 다른 결과가 됐으면 사용자가 알려 준 것이니 학습한다
-            if forced != nil, let m = model, m != last { runtime.userDict.learn(keys, last) }
+            // 되돌리기·가르기 취소로 모델과 다른 결과가 됐으면 사용자가 결과를 보고 고친 것이니 학습한다.
+            // 어절 사이 한 번 톡(힌트)은 옛 습관으로 누른 것일 수 있어(menubar→ㅡ두ㅕㅠㅁㄱ) 학습하지 않는다.
+            if forced != nil, !forcedByHint, let m = model, m != last { runtime.userDict.learn(keys, last) }
         } else {
             lastCommit = nil
             // 영어|한국어로 가른 어절은 혼합 어절로 학습한다
@@ -258,6 +261,7 @@ public final class HanyoungInputController: IMKInputController {
         fixed = []
         displayed = nil
         forced = nil
+        forcedByHint = false
     }
 
     public override func commitComposition(_ sender: Any!) {

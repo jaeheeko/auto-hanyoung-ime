@@ -28,6 +28,7 @@ public enum Model {
         params.minPrefix = Int(num(p["min_prefix"], Double(params.minPrefix)))
         params.mixPenalty = num(p["mix_penalty"], params.mixPenalty)
         params.suffixLambda = num(p["suffix_lambda"], params.suffixLambda)
+        params.suffixOOVPenalty = num(p["suffix_oov_penalty"], params.suffixOOVPenalty)
         params.jamoMass = num(p["jamo_mass"], params.jamoMass)
         params.runAttachProb = num(p["run_attach_prob"], params.runAttachProb)
         params.repeatDecay = num(p["repeat_decay"], params.repeatDecay)

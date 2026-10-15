@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-MODEL_URL=${HANYOUNG_MODEL_URL:-https://github.com/jaeheeko/auto-hanyoung-ime/releases/download/model-v1/hanyoung.model}
+MODEL_URL=${HANYOUNG_MODEL_URL:-https://github.com/jaeheeko/auto-hanyoung-ime/releases/download/model-v2/hanyoung.model}
 if [ ! -s models/hanyoung.model ]; then
   echo "models/hanyoung.model 없음 → 기본 모델 내려받기: $MODEL_URL"
   mkdir -p models

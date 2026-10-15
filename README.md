@@ -17,9 +17,9 @@ Slackdptj qhkTdjdy   →  Slack에서 봤어요
 ## 무엇이 좋은가
 
 - **전부 로컬.** 네트워크도 신경망도 없고 어절당 0.4ms 안에 끝나 타이핑이 밀리지 않습니다. 메모리 약 50MB.
-- **설치하면 바로 씁니다.** 공개 코퍼스로 학습한 기본 모델이 들어 있습니다. 한영 혼용 노트 10만 어절로 재 보면 어절 정확도 99.9%, 본인 문서로 개인화하면 99.97%입니다(오류 1/3,300어절).
+- **설치하면 바로 씁니다.** 공개 코퍼스로 학습한 기본 모델이 들어 있고, `html`·`sql`·`sdk` 같은 개발 용어도 압니다. 한영 혼용 노트 10만 어절로 재 보면 어절 정확도 99.9%, 본인 문서로 개인화하면 99.97%입니다(오류 1/3,300어절).
 - **한/영 키 습관과 싸우지 않습니다.** 누르던 대로 눌러도 되고, 안 누르면 자동입니다. 누른 쪽이 손해 보는 경우가 없게 만들었습니다.
-- **틀리면 톡 두 번.** 방금 어절이 반대 언어로 바뀌고, 그 단어는 학습되어 다음부터 맞게 나옵니다.
+- **틀리면 톡 두 번.** 방금 어절이 반대 언어로 바뀌고, 그 단어는 한 번 고치면 다음부터 맞게 나옵니다.
 
 ## 설치
 
@@ -75,4 +75,4 @@ python3 -I tools/personalize.py ~/Documents/notes
 
 ## 라이선스
 
-코드는 [MIT](LICENSE). 기본 모델은 [NSMC](https://github.com/e9t/nsmc)(CC0), [KorNLI](https://github.com/kakaobrain/kor-nlu-datasets)(CC BY-SA 4.0), [KLUE YNAT](https://github.com/KLUE-benchmark/KLUE)(CC BY-SA 4.0), [FrequencyWords](https://github.com/hermitdave/FrequencyWords)(CC BY-SA 4.0)의 어절 빈도로 만들어 CC BY-SA 4.0을 따릅니다. 틀리면 한 키로 되돌린다는 발상은 Punto Switcher에서 가져왔습니다.
+코드는 [MIT](LICENSE). 기본 모델은 [NSMC](https://github.com/e9t/nsmc)(CC0), [KorNLI](https://github.com/kakaobrain/kor-nlu-datasets)(CC BY-SA 4.0), [KLUE YNAT](https://github.com/KLUE-benchmark/KLUE)(CC BY-SA 4.0), [FrequencyWords](https://github.com/hermitdave/FrequencyWords)(CC BY-SA 4.0)의 어절 빈도에 [Stack Overflow 태그](https://api.stackexchange.com/)(CC BY-SA 4.0)와 [GitHub Linguist](https://github.com/github-linguist/linguist)(MIT)의 기술 어휘를 더해 만들어 CC BY-SA 4.0을 따릅니다. 틀리면 한 키로 되돌린다는 발상은 Punto Switcher에서 가져왔습니다.

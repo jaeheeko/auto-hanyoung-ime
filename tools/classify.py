@@ -84,6 +84,7 @@ class Params:
     lex_lambda_ko: float = 0.5
     lex_lambda_en: float = 0.5
     suffix_lambda: float = 0.7       # 접미 n-gram 비중, 나머지는 일반 KO n-gram
+    suffix_oov_penalty: float = 8.0  # 접미에 조사·어미 사전(2회 이상)에 없는 음절이 있으면 벌점 (h싀, i홋 억제)
     dict_weight: float = 0.2         # /usr/share/dict/words 단어 1개의 학습 가중치
     jamo_mass: float = 0.01          # 전체 어절 중 자모 관용 표현(ㅋㅋ 등)의 비중
     run_attach_prob: float = 0.02    # 음절에 반복 자모(굿ㅋㅋ)가 붙을 확률
@@ -114,6 +115,11 @@ class Classifier:
         lm = CharLM(self.ko.lm.order)
         words = sorted(self.suffix_counts)
         lm.train(words, weights=[self.suffix_counts[w] for w in words])
+        # 접미 음절 목록: 2회 이상 나온 접미를 조립한 음절. 여기 없는 음절(싀, 홋)이 접미에 나오면 벌점.
+        self.suffix_syllables = set()
+        for w, c in self.suffix_counts.items():
+            if c >= 2:
+                self.suffix_syllables.update(compose(w)[0])
         return lm
 
     def prune(self, min_count: float, ko_only: bool = False):
@@ -192,7 +198,12 @@ class Classifier:
             return -math.inf, text
         p_suf = math.exp(self.suffix_lm.logprob(suffix, eos=final))
         p_ng = math.exp(self.ko.logprob_ngram(suffix, eos=final))
-        return math.log(self.p.suffix_lambda * p_suf + (1 - self.p.suffix_lambda) * p_ng), text
+        lp = math.log(self.p.suffix_lambda * p_suf + (1 - self.p.suffix_lambda) * p_ng)
+        # 조합 중 말미의 초성은 아직 음절이 아니니 빼고 본다
+        body = text if final else text.rstrip("".join(CONSONANTS))
+        if any(ch not in self.suffix_syllables for ch in body):
+            lp -= self.p.suffix_oov_penalty
+        return lp, text
 
     def mix_loglik(self, keys: str, final: bool = True):
         best = (-math.inf, "", -1)
@@ -268,7 +279,7 @@ def load_en_frequency(path):
         for line in f:
             parts = line.split()
             if len(parts) == 2 and parts[0].isalpha():
-                lex[parts[0]] += int(parts[1])
+                lex[parts[0]] += float(parts[1])
     return lex
 
 
@@ -320,6 +331,9 @@ def train(train_rows, external_dir, order=5, params: Params = None, prior="estim
             en_lex[w] += max(1, int(c * scale))
     for w in load_dict_words():
         en_lex[w] += params.dict_weight
+    # 기술 어휘(tools/tech_lexicon.py): 자막 빈도표에 없는 html, sql, sdk 같은 약어
+    for w, c in load_en_frequency(os.path.join(external_dir, "tech_words.txt")).items():
+        en_lex[w] += c
     en_lm = CharLM(order)
     en_lm.train(list(en_lex.keys()), weights=list(en_lex.values()))
 
@@ -355,6 +369,11 @@ def load(path: str) -> Classifier:
     with open(path, "rb") as f:
         d = pickle.load(f)
     p = d["params"]
+    # 옛 모델 파일에 없는 파라미터는 기본값으로
+    from dataclasses import fields
+    for fld in fields(Params):
+        if not hasattr(p, fld.name) and fld.default is not fld.default_factory:
+            setattr(p, fld.name, fld.default)
     ko = WordModel(CharLM.from_dict(d["ko_lm"]), d["ko_lex"], p.lex_lambda_ko)
     en = WordModel(CharLM.from_dict(d["en_lm"]), d["en_lex"], p.lex_lambda_en, case_fold=True)
     return Classifier(ko, en, d["suffix_counts"], p)
