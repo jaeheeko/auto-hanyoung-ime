@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto HanYoung 체험</title>
+<meta name="description" content="한/영 전환키 없이 그냥 타이핑하면 어절마다 한국어·영어를 알아서 판정하는 macOS 입력기 Auto HanYoung을 브라우저에서 체험합니다.">
+<style>
+:root {
+  --bg: #f6f5f1; --fg: #1b1b1f; --muted: #6b6b73; --line: #dcdad3; --card: #ffffff;
+  --accent: #0b6e4f; --accent-soft: #e0f2ea; --en: #2b4fd8; --en-soft: #e4e9fb; --mix: #b4590a; --mix-soft: #fbead8;
+  --bad: #b3261e; --bad-soft: #fbe3e1; --caret: #1b1b1f; --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15161a; --fg: #ececf1; --muted: #9a9aa6; --line: #2d2f36; --card: #1d1f25;
+  --accent: #5ad19e; --accent-soft: #163626; --en: #8fa6ff; --en-soft: #1e2748; --mix: #f0a35c; --mix-soft: #40281a;
+  --bad: #ff7b72; --bad-soft: #3d1f1d; --caret: #ececf1; } }
+:root[data-theme="dark"] {
+  --bg: #15161a; --fg: #ececf1; --muted: #9a9aa6; --line: #2d2f36; --card: #1d1f25;
+  --accent: #5ad19e; --accent-soft: #163626; --en: #8fa6ff; --en-soft: #1e2748; --mix: #f0a35c; --mix-soft: #40281a;
+  --bad: #ff7b72; --bad-soft: #3d1f1d; --caret: #ececf1; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); line-height: 1.55; }
+main { max-width: 880px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
+h1 .k { color: var(--accent); }
+h2 { font-size: 20px; margin: 48px 0 12px; }
+p { margin: 8px 0; }
+.lead { font-size: 18px; color: var(--muted); max-width: 640px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.status { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); margin: 24px 0 8px; min-height: 20px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mix); flex: none; }
+.dot.ok { background: var(--accent); }
+.dot.err { background: var(--bad); }
+.editor { position: relative; min-height: 180px; padding: 22px 24px; font-size: 24px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; cursor: text; outline: none; }
+.editor:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.editor .hint { color: var(--muted); font-size: 17px; pointer-events: none; }
+.editor .hint kbd { font: inherit; font-family: var(--mono); font-size: 15px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+.w { border-radius: 4px; padding: 0 1px; cursor: pointer; }
+.w:hover { background: var(--accent-soft); }
+.w.KO:hover { background: var(--accent-soft); } .w.EN:hover { background: var(--en-soft); } .w.MIX:hover { background: var(--mix-soft); }
+.marked { position: relative; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.marked.KO { text-decoration-color: var(--accent); } .marked.EN { text-decoration-color: var(--en); } .marked.MIX { text-decoration-color: var(--mix); }
+.tag { position: absolute; top: -14px; left: 0; font-size: 10px; letter-spacing: .04em; font-weight: 600; white-space: nowrap; }
+.tag.KO { color: var(--accent); } .tag.EN { color: var(--en); } .tag.MIX { color: var(--mix); }
+.caret { display: inline-block; width: 2px; height: 1.1em; background: var(--caret); vertical-align: -0.2em; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+.editor:not(:focus) .caret { visibility: hidden; }
+@keyframes blink { 50% { opacity: 0; } }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+button { font: inherit; font-size: 14px; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button kbd { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: 6px; }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.examples button { font-family: var(--mono); font-size: 13px; }
+.compare { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 28px; }
+.compare > div { background: var(--card); padding: 14px 18px; min-height: 76px; }
+.compare .lbl { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+.compare .val { font-size: 18px; white-space: pre-wrap; word-break: break-word; min-height: 1.6em; }
+.compare .val.mono { font-family: var(--mono); font-size: 16px; }
+.compare .bad .val { color: var(--bad); }
+.compare .good { outline: 2px solid var(--accent); outline-offset: -2px; }
+.compare .good .lbl { color: var(--accent); font-weight: 600; }
+@media (min-width: 720px) { .compare { grid-template-columns: 1fr 1fr 1fr; } }
+.log { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; background: var(--card); }
+.chip:hover { border-color: var(--fg); }
+.chip b { font-weight: 600; font-size: 10px; letter-spacing: .04em; }
+.chip.KO b { color: var(--accent); } .chip.EN b { color: var(--en); } .chip.MIX b { color: var(--mix); }
+.chip .lrn { color: var(--muted); font-size: 11px; }
+.grid3 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 720px) { .grid3 { grid-template-columns: 1fr 1fr 1fr; } }
+.grid3 .card { padding: 16px 18px; }
+.grid3 h3 { margin: 0 0 6px; font-size: 16px; }
+.grid3 p { margin: 0; color: var(--muted); font-size: 14px; }
+code { font-family: var(--mono); font-size: .92em; background: var(--card); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+td, th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 13px; }
+a { color: var(--accent); }
+.foot { margin-top: 48px; font-size: 13px; color: var(--muted); }
+.mobile-note { display: none; font-size: 13px; color: var(--muted); margin-top: 8px; }
+@media (hover: none) and (pointer: coarse) { .mobile-note { display: block; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>한/영 키를 <span class="k">누르지 마세요.</span></h1>
+  <p class="lead">Auto HanYoung은 어절마다 한국어인지 영어인지, 영어에 조사가 붙은 건지 알아서 판정해 바꿔 주는 macOS 입력기입니다. 아래에 <b>키보드를 영어 상태로 두고</b> 한글 단어도 영어 키 그대로 쳐 보세요.</p>
+
+  <div class="status"><span class="dot" id="dot"></span><span id="status">모델 내려받는 중…</span></div>
+  <div class="card editor" id="editor" tabindex="0" role="textbox" aria-multiline="true" aria-label="체험 입력 영역">
+    <span class="hint" id="hint">여기를 누르고 <kbd>gksrmfdmf Tmqslek hello Slackdptj</kbd> 처럼 쳐 보세요. 스페이스를 치면 어절이 확정됩니다.</span>
+  </div>
+  <div class="toolbar">
+    <button id="undo" class="primary">틀렸어요, 되돌리기<kbd>Esc</kbd></button>
+    <button id="clear">지우기</button>
+    <span style="color:var(--muted);font-size:13px">확정된 어절을 클릭해도 다른 언어로 바뀌고, 그 단어는 이 페이지 안에서 학습됩니다.</span>
+  </div>
+  <div class="examples" id="examples"></div>
+  <p class="mobile-note">모바일에서는 물리 키보드가 없어 예시 재생으로 체험할 수 있습니다. 직접 치려면 데스크톱에서 열어 주세요.</p>
+
+  <div class="compare">
+    <div class="bad"><div class="lbl">영어 상태였다면</div><div class="val mono" id="asEn"></div></div>
+    <div class="bad"><div class="lbl">한글 상태였다면</div><div class="val" id="asKo"></div></div>
+    <div class="good"><div class="lbl">Auto HanYoung</div><div class="val" id="asAuto"></div></div>
+  </div>
+  <div class="log" id="log"></div>
+
+  <h2>왜 만들었나</h2>
+  <p>한영 키를 분명히 눌렀는데 씹혀서 <code>gksrmf</code>이 찍힙니다. 창 몇 개를 오가다 보면 지금 어느 언어인지 꼬여서 또 틀립니다. 그때마다 지우고 다시 칩니다. 평생 수십 시간을 이 짓에 쓰고, 그만큼 빡칩니다. 이 입력기는 그 시간을 없앱니다.</p>
+  <div class="grid3" style="margin-top:14px">
+    <div class="card"><h3>전부 로컬</h3><p>네트워크도 신경망도 없습니다. 문자 5-gram 확률과 어휘 사전으로 어절당 0.1ms 안에 끝나 타이핑이 밀리지 않습니다. 이 페이지도 모델을 받은 뒤엔 브라우저 안에서만 돕니다.</p></div>
+    <div class="card"><h3>한영 혼용에 강함</h3><p><code>Slack에서</code>, <code>API를</code>처럼 영어에 조사가 붙은 어절을 세 번째 가설로 따로 봅니다. 한영 혼용 노트 10만 어절로 재면 어절 정확도 99.9%, 본인 문서로 개인화하면 99.97%입니다.</p></div>
+    <div class="card"><h3>틀리면 한 번만 고치면 끝</h3><p>한/영 키를 톡 두 번 치면 방금 어절이 반대 언어로 바뀌고, 그 단어는 학습되어 조사가 붙은 변형까지 다음부터 맞게 나옵니다.</p></div>
+  </div>
+
+  <h2>실제 입력기에서는</h2>
+  <table>
+    <tr><th>상황</th><th>한/영 키</th><th>뜻</th></tr>
+    <tr><td>어절 중간</td><td>한 번</td><td>여기서 언어가 바뀐다. <code>SK</code> 톡 <code>플래닛</code> → SK플래닛</td></tr>
+    <tr><td>어절 사이</td><td>한 번</td><td>다음 어절은 반대 언어로 시작한다</td></tr>
+    <tr><td>어절 사이</td><td>두 번</td><td>방금 어절을 다른 언어로. 연타하면 계속 돈다</td></tr>
+    <tr><td>글자를 선택한 뒤</td><td>한 번</td><td>선택한 글자만 반대 언어로</td></tr>
+  </table>
+  <p style="margin-top:14px">macOS 13 이상. <a href="https://github.com/jaeheeko/auto-hanyoung-ime/releases" target="_blank" rel="noopener">Releases</a>에서 zip을 받아 <code>~/Library/Input Methods/</code>에 넣거나, 소스를 받아 <code>./scripts/build.sh && ./scripts/install.sh</code>. 코드는 MIT, 자세한 설명은 <a href="https://github.com/jaeheeko/auto-hanyoung-ime" target="_blank" rel="noopener">GitHub</a>에.</p>
+
+  <p class="foot">이 체험판은 용량을 위해 가지치기한 모델(원본 26MB → 약 3MB 전송)을 쓰므로 실제 앱보다 정확도가 조금 낮습니다(테스트 분할 99.8% vs 99.86%, 개인화 시 99.97%). 입력한 내용은 어디에도 전송되지 않습니다. 모델: NSMC(CC0), KorNLI·KLUE YNAT·FrequencyWords·Stack Overflow 태그(CC BY-SA 4.0), GitHub Linguist(MIT).</p>
+</main>
+<script>
+/* Auto HanYoung 판정기의 JavaScript 이식. tools/classify.py·lm.py·hangul.py와 동작이 같아야 한다.
+   모델은 tools/export_demo.py가 만든 JSON. 브라우저와 Node 양쪽에서 쓴다. */
+(function (root) {
+  "use strict";
+  const BOS = "\u0002", EOS = "\u0003";
+
+  // ---------- 두벌식 오토마타 ----------
+  const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+  const JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ";
+  const JONG = "ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ";
+  const KEY_TO_JAMO = {
+    r: "ㄱ", R: "ㄲ", s: "ㄴ", e: "ㄷ", E: "ㄸ", f: "ㄹ", a: "ㅁ", q: "ㅂ", Q: "ㅃ", t: "ㅅ", T: "ㅆ",
+    d: "ㅇ", w: "ㅈ", W: "ㅉ", c: "ㅊ", z: "ㅋ", x: "ㅌ", v: "ㅍ", g: "ㅎ",
+    k: "ㅏ", o: "ㅐ", i: "ㅑ", O: "ㅒ", j: "ㅓ", p: "ㅔ", u: "ㅕ", P: "ㅖ", h: "ㅗ", y: "ㅛ",
+    n: "ㅜ", b: "ㅠ", m: "ㅡ", l: "ㅣ",
+  };
+  const SHIFT_KEYS = new Set("QWERTOP");
+  const JAMO_TO_KEYS = {};
+  for (const k in KEY_TO_JAMO) JAMO_TO_KEYS[KEY_TO_JAMO[k]] = k;
+  Object.assign(JAMO_TO_KEYS, { "ㅘ": "hk", "ㅙ": "ho", "ㅚ": "hl", "ㅝ": "nj", "ㅞ": "np", "ㅟ": "nl", "ㅢ": "ml",
+    "ㄳ": "rt", "ㄵ": "sw", "ㄶ": "sg", "ㄺ": "fr", "ㄻ": "fa", "ㄼ": "fq", "ㄽ": "ft", "ㄾ": "fx", "ㄿ": "fv", "ㅀ": "fg", "ㅄ": "qt" });
+  const COMPOUND_JUNG = { "ㅗㅏ": "ㅘ", "ㅗㅐ": "ㅙ", "ㅗㅣ": "ㅚ", "ㅜㅓ": "ㅝ", "ㅜㅔ": "ㅞ", "ㅜㅣ": "ㅟ", "ㅡㅣ": "ㅢ" };
+  const COMPOUND_JONG = { "ㄱㅅ": "ㄳ", "ㄴㅈ": "ㄵ", "ㄴㅎ": "ㄶ", "ㄹㄱ": "ㄺ", "ㄹㅁ": "ㄻ", "ㄹㅂ": "ㄼ", "ㄹㅅ": "ㄽ", "ㄹㅌ": "ㄾ", "ㄹㅍ": "ㄿ", "ㄹㅎ": "ㅀ", "ㅂㅅ": "ㅄ" };
+  const SPLIT_JONG = {};
+  for (const k in COMPOUND_JONG) SPLIT_JONG[COMPOUND_JONG[k]] = k;
+  const JONG_OK = new Set(JONG);
+  const CONSONANTS = new Set(CHO);
+  const idx = (s) => { const m = {}; for (let i = 0; i < s.length; i++) m[s[i]] = i; return m; };
+  const CHO_INDEX = idx(CHO), JUNG_INDEX = idx(JUNG), JONG_INDEX = idx(JONG);
+
+  const isUpper = (ch) => ch >= "A" && ch <= "Z";
+  const isSyllable = (ch) => ch >= "가" && ch <= "힣";
+  const isCompatJamo = (ch) => ch >= "ㄱ" && ch <= "ㅣ";
+  const isHangul = (ch) => isSyllable(ch) || isCompatJamo(ch);
+
+  function jamoOfKey(ch) {
+    let j = KEY_TO_JAMO[ch];
+    if (j === undefined && isUpper(ch)) j = KEY_TO_JAMO[ch.toLowerCase()];
+    return j;
+  }
+
+  function toKeys(text) {
+    let out = "";
+    for (const ch of text) {
+      if (isSyllable(ch)) {
+        const code = ch.charCodeAt(0) - 0xAC00;
+        const cho = Math.floor(code / 588), jung = Math.floor((code % 588) / 28), jong = code % 28;
+        out += JAMO_TO_KEYS[CHO[cho]] + JAMO_TO_KEYS[JUNG[jung]];
+        if (jong) out += JAMO_TO_KEYS[JONG[jong - 1]];
+      } else if (isCompatJamo(ch)) out += JAMO_TO_KEYS[ch] || ch;
+      else out += ch;
+    }
+    return out;
+  }
+
+  /** 키열을 두벌식으로 조립한다. {text, lone, shiftBad} */
+  function compose(keys) {
+    let out = "", cho = null, jung = null, jong = null, lone = 0, shiftBad = 0;
+    const flush = () => {
+      if (cho === null && jung === null) return;
+      if (cho !== null && jung !== null) {
+        let code = 0xAC00 + CHO_INDEX[cho] * 588 + JUNG_INDEX[jung] * 28;
+        if (jong !== null) code += JONG_INDEX[jong] + 1;
+        out += String.fromCharCode(code);
+      } else { out += cho !== null ? cho : jung; lone++; }
+      cho = jung = jong = null;
+    };
+    for (const ch of keys) {
+      const j = jamoOfKey(ch);
+      if (j === undefined) { flush(); out += ch; continue; }
+      if (isUpper(ch) && !SHIFT_KEYS.has(ch)) shiftBad++;
+      if (CONSONANTS.has(j)) {
+        if (jung === null) { if (cho !== null) flush(); cho = j; }
+        else if (cho === null) { flush(); cho = j; }
+        else if (jong === null) { if (JONG_OK.has(j)) jong = j; else { flush(); cho = j; } }
+        else { const comp = COMPOUND_JONG[jong + j]; if (comp) jong = comp; else { flush(); cho = j; } }
+      } else {
+        if (jung === null) jung = j;
+        else if (jong === null) { const comp = COMPOUND_JUNG[jung + j]; if (comp) jung = comp; else { flush(); jung = j; } }
+        else if (SPLIT_JONG[jong]) { const pair = SPLIT_JONG[jong]; jong = pair[0]; flush(); cho = pair[1]; jung = j; }
+        else { const moved = jong; jong = null; flush(); cho = moved; jung = j; }
+      }
+    }
+    flush();
+    return { text: out, lone, shiftBad };
+  }
+
+  // ---------- 문자 n-gram (Witten-Bell) ----------
+  class CharLM {
+    constructor(order) { this.order = order; this.counts = {}; this.vocab = new Set(); this.finalize(); }
+    static fromJSON(d) {
+      const lm = new CharLM(d.order);
+      lm.counts = d.counts;
+      lm.vocab = new Set(d.vocab);
+      lm.finalize();
+      return lm;
+    }
+    train(counts) {  // {word: weight}
+      const pad = BOS.repeat(this.order - 1);
+      for (const w in counts) {
+        const wt = counts[w], s = pad + w + EOS;
+        for (let i = this.order - 1; i < s.length; i++) {
+          const ch = s[i];
+          this.vocab.add(ch);
+          for (let k = 0; k < this.order; k++) {
+            const ctx = s.slice(i - k, i);
+            (this.counts[ctx] || (this.counts[ctx] = {}))[ch] = (this.counts[ctx][ch] || 0) + wt;
+          }
+        }
+      }
+      this.finalize();
+    }
+    finalize() {
+      this.totals = {}; this.types = {};
+      for (const ctx in this.counts) {
+        let n = 0, t = 0;
+        for (const ch in this.counts[ctx]) { n += this.counts[ctx][ch]; t++; }
+        this.totals[ctx] = n; this.types[ctx] = t;
+      }
+      this.vsize = this.vocab.size + 1;
+    }
+    prob(ctx, ch) {
+      let p = 1 / this.vsize;
+      for (let k = 0; k <= ctx.length; k++) {
+        const c = k ? ctx.slice(ctx.length - k) : "";
+        const counter = this.counts[c];
+        if (counter === undefined) break;
+        const n = this.totals[c], t = this.types[c];
+        p = ((counter[ch] || 0) + t * p) / (n + t);
+      }
+      return p;
+    }
+    logprob(word, eos) {
+      const s = BOS.repeat(this.order - 1) + word + (eos ? EOS : "");
+      let lp = 0;
+      for (let i = this.order - 1; i < s.length; i++) lp += Math.log(this.prob(s.slice(i - this.order + 1, i), s[i]));
+      return lp;
+    }
+  }
+
+  class WordModel {
+    constructor(lm, lex, lam, caseFold, foldWeight) {
+      this.lm = lm; this.lex = lex; this.lam = lam; this.caseFold = caseFold; this.foldWeight = foldWeight || 0.3;
+      this.total = 0;
+      for (const w in lex) this.total += lex[w];
+    }
+    addCounts(counts) { for (const w in counts) { this.lex[w] = (this.lex[w] || 0) + counts[w]; this.total += counts[w]; } }
+    _prob(word, eos) {
+      const pNg = Math.exp(this.lm.logprob(word, eos));
+      if (!eos) return pNg;
+      const pLex = this.total ? (this.lex[word] || 0) / this.total : 0;
+      return this.lam * pLex + (1 - this.lam) * pNg;
+    }
+    logprob(word, eos) {
+      let p = this._prob(word, eos);
+      if (this.caseFold && word !== word.toLowerCase() && /[A-Z]/.test(word)) p = Math.max(p, this.foldWeight * this._prob(word.toLowerCase(), eos));
+      return Math.log(p);
+    }
+    logprobNgram(word, eos) { return this.lm.logprob(word, eos); }
+  }
+
+  // ---------- 판정기 ----------
+  const EMOTICON_RUN_KEYS = new Set("zgbn");
+  const LABELS = ["KO", "EN", "MIX"];
+
+  function collapseRuns(keys) {
+    let out = "", extra = 0;
+    for (const ch of keys) {
+      if (out.length >= 2 && out[out.length - 1] === ch && out[out.length - 2] === ch) extra++;
+      else out += ch;
+    }
+    return [out, extra];
+  }
+  function stripRuns(keys) {
+    let rest = "", runs = [], endsWithRun = false, i = 0;
+    const n = keys.length;
+    while (i < n) {
+      let j = i;
+      while (j < n && keys[j] === keys[i]) j++;
+      if (EMOTICON_RUN_KEYS.has(keys[i]) && j - i >= 2) { runs.push(j - i); endsWithRun = j === n; }
+      else { rest += keys.slice(i, j); endsWithRun = false; }
+      i = j;
+    }
+    return [rest, runs, endsWithRun];
+  }
+
+  class Classifier {
+    constructor(model) {
+      this.p = model.params;
+      this.jamoTotal = 0;
+      for (const k in this.p.jamo_lex) this.jamoTotal += this.p.jamo_lex[k];
+      this.ko = new WordModel(CharLM.fromJSON(model.ko), model.ko.lex, model.ko.lam, false, 0);
+      this.en = new WordModel(CharLM.fromJSON(model.en), model.en.lex, model.en.lam, true, model.en.fold_weight);
+      this.suffixCounts = Object.assign({}, model.suffix);
+      this.buildSuffix();
+    }
+    buildSuffix() {
+      this.suffixLM = new CharLM(this.ko.lm.order);
+      this.suffixLM.train(this.suffixCounts);
+      this.suffixSyllables = new Set();
+      for (const w in this.suffixCounts) if (this.suffixCounts[w] >= 2) for (const ch of compose(w).text) this.suffixSyllables.add(ch);
+    }
+    /** 사용자가 고친 어절을 어휘 덧층에 더한다 (앱의 Classifier.learn과 같다) */
+    learn(keys, label, split, weight) {
+      weight = weight || 20;
+      if (label === "EN") this.en.addCounts({ [keys]: weight });
+      else if (label === "KO") this.ko.addCounts({ [Classifier.canon(keys)]: weight });
+      else { const i = split != null ? split : this.mixLoglik(keys, true)[2]; if (i > 0) this.en.addCounts({ [keys.slice(0, i)]: weight }); }
+    }
+    static canon(keys) {
+      let out = "";
+      for (const c of keys) out += (SHIFT_KEYS.has(c) || !isUpper(c)) ? c : c.toLowerCase();
+      return out;
+    }
+    static trailingLoneCho(keys, text) {
+      return keys.length > 0 && CONSONANTS.has(jamoOfKey(keys[keys.length - 1])) && text.length > 0 && isCompatJamo(text[text.length - 1]);
+    }
+    koWordLoglik(keys, eos) {
+      const c = compose(keys);
+      let lone = c.lone;
+      if (!eos && Classifier.trailingLoneCho(keys, c.text)) lone--;
+      let lp = this.ko.logprob(Classifier.canon(keys), eos);
+      lp -= this.p.lone_penalty * lone + this.p.shift_penalty * c.shiftBad;
+      return [lp, c.text];
+    }
+    emoticonLoglik(keys, final) {
+      const p = this.p;
+      const [collapsed, extra] = collapseRuns(keys);
+      const w = p.jamo_lex[collapsed];
+      if (w !== undefined) return Math.log(p.jamo_mass * w / this.jamoTotal) - p.repeat_decay * extra;
+      const [rest, runs, endsWithRun] = stripRuns(keys);
+      if (!runs.length) return null;
+      let runCost = 0;
+      for (const n of runs) runCost += Math.log(p.run_attach_prob) - p.repeat_decay * (n - 2);
+      if (!rest) return Math.log(p.jamo_mass) + runCost;
+      return this.koWordLoglik(rest, final || endsWithRun)[0] + runCost;
+    }
+    koLoglik(keys, final) {
+      let [lp, text] = this.koWordLoglik(keys, final);
+      const alt = this.emoticonLoglik(keys, final);
+      if (alt !== null && alt > lp) lp = alt;
+      return [lp, text];
+    }
+    enLoglik(keys, final) { return [this.en.logprob(keys, final), keys]; }
+    suffixLoglik(suffix, final) {
+      const c = compose(suffix);
+      let lone = c.lone;
+      if (!final && Classifier.trailingLoneCho(suffix, c.text)) lone--;
+      if (lone > 0 || c.shiftBad > 0) return [-Infinity, c.text];
+      const pSuf = Math.exp(this.suffixLM.logprob(suffix, final));
+      const pNg = Math.exp(this.ko.logprobNgram(suffix, final));
+      let lp = Math.log(this.p.suffix_lambda * pSuf + (1 - this.p.suffix_lambda) * pNg);
+      let body = c.text;
+      if (!final) while (body.length && CONSONANTS.has(body[body.length - 1])) body = body.slice(0, -1);
+      for (const ch of body) if (!this.suffixSyllables.has(ch)) { lp -= this.p.suffix_oov_penalty; break; }
+      return [lp, c.text];
+    }
+    mixLoglik(keys, final) {
+      let best = [-Infinity, "", -1];
+      const n = keys.length;
+      for (let i = Math.max(this.p.min_prefix, n - this.p.max_suffix); i < n; i++) {
+        const prefix = keys.slice(0, i), suffix = keys.slice(i);
+        const letters = prefix.replace(/'/g, "");
+        if (!/^[A-Za-z]+$/.test(letters)) continue;
+        const [sLp, sText] = this.suffixLoglik(suffix, final);
+        if (sLp === -Infinity) continue;
+        const lp = this.en.logprob(prefix, true) + sLp - this.p.mix_penalty;
+        if (lp > best[0]) best = [lp, prefix + sText, i];
+      }
+      return best;
+    }
+    /** 어절 판정. prev: 직전 라벨("BR"|"KO"|"EN"|"MIX"), bias: {라벨: 가산점}, final: 어절이 끝났는지 */
+    decide(keys, prev, bias, final) {
+      if (prev === undefined) prev = "BR";
+      if (final === undefined) final = true;
+      const prior = this.p.prior[prev] || this.p.prior.BR || {};
+      const [koLp, koText] = this.koLoglik(keys, final);
+      const [enLp, enText] = this.enLoglik(keys, final);
+      const [mixLp, mixText, split] = this.mixLoglik(keys, final);
+      const scores = { KO: koLp + (prior.KO || 0), EN: enLp + (prior.EN || 0), MIX: mixLp + (prior.MIX || 0) };
+      if (bias) for (const k in bias) scores[k] += bias[k];
+      const ranked = LABELS.slice().sort((a, b) => scores[b] - scores[a]);
+      const texts = { KO: koText, EN: enText };
+      if (mixLp > -Infinity) texts.MIX = mixText;
+      const label = ranked[0];
+      return { label, text: texts[label], texts, scores, split: label === "MIX" ? split : -1, margin: scores[ranked[0]] - scores[ranked[1]] };
+    }
+  }
+
+  const api = { compose, toKeys, isHangul, isSyllable, CharLM, WordModel, Classifier, LABELS };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.Hanyoung = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
+(function () {
+  "use strict";
+  const H = window.Hanyoung;
+  const MODEL_URL = new URLSearchParams(location.search).get("model")
+    || (location.hostname === "jaeheeko.github.io" ? "model.json" : "https://jaeheeko.github.io/auto-hanyoung-ime/model.json");
+  const HYSTERESIS = 1.5, DICT_WEIGHT = 10, DICT_MAX = 3;
+  const LABEL_KO = { KO: "한국어", EN: "영어", MIX: "영어+조사" };
+  const $ = (id) => document.getElementById(id);
+  const editor = $("editor"), hint = $("hint"), status = $("status"), dot = $("dot");
+  const asEn = $("asEn"), asKo = $("asKo"), asAuto = $("asAuto"), log = $("log");
+
+  let clf = null;
+  // 상태: 확정 조각들(어절 또는 구분 문자) + 조합 중 버퍼
+  let pieces = [];       // {kind:"word", keys, text, label, texts, learned} | {kind:"sep", ch}
+  let buffer = "";
+  let displayed = null;  // 조합 중 어절의 표시 가설 (히스테리시스)
+  let prevLabel = "BR";
+  const userDict = {};   // keys → {label: count}
+
+  function bias(keys) {
+    const b = {};
+    const e = userDict[keys];
+    if (e) for (const l in e) b[l] = (b[l] || 0) + Math.min(e[l], DICT_MAX) * DICT_WEIGHT;
+    let best = 0;
+    for (const w in userDict) {
+      const c = userDict[w].EN;
+      if (c > 0 && keys.length > w.length && keys.startsWith(w)) {
+        const tail = H.compose(keys.slice(w.length));
+        if (tail.lone === 0 && tail.shiftBad === 0) best = Math.max(best, c);
+      }
+    }
+    if (best) b.MIX = (b.MIX || 0) + Math.min(best, DICT_MAX) * DICT_WEIGHT;
+    return b;
+  }
+  function learn(keys, label, split) {
+    const e = userDict[keys] || (userDict[keys] = {});
+    e[label] = (e[label] || 0) + 1;
+    for (const o of H.LABELS) if (o !== label && e[o] > 0) e[o]--;
+    clf.learn(keys, label, split);
+  }
+  function decide(keys, final) { return clf.decide(keys, prevLabel, bias(keys), final); }
+  function pick(d) {
+    if (displayed && d.texts[displayed] !== undefined && d.scores[d.label] - d.scores[displayed] < HYSTERESIS) return displayed;
+    return d.label;
+  }
+  const isWordKey = (ch) => /^[A-Za-z']$/.test(ch);
+
+  function commit() {
+    if (!buffer) return;
+    const d = decide(buffer, true);
+    const label = displayed && d.texts[displayed] !== undefined ? displayed : d.label;
+    pieces.push({ kind: "word", keys: buffer, text: d.texts[label], label, texts: d.texts, model: d.label, margin: d.margin, split: d.split });
+    prevLabel = label;
+    buffer = ""; displayed = null;
+  }
+  function typeChar(ch) {
+    if (!clf) return;
+    if (isWordKey(ch)) { buffer += ch; }
+    else { commit(); pieces.push({ kind: "sep", ch }); if (ch === "\n") prevLabel = "BR"; }
+    render();
+  }
+  function backspace() {
+    if (buffer) buffer = buffer.slice(0, -1);
+    else if (pieces.length) {
+      const last = pieces.pop();
+      if (last.kind === "word") { buffer = last.keys; buffer = buffer.slice(0, -1); displayed = last.label; }
+      prevLabel = lastWordLabel();
+    }
+    render();
+  }
+  function lastWordLabel() { for (let i = pieces.length - 1; i >= 0; i--) if (pieces[i].kind === "word") return pieces[i].label; return "BR"; }
+  function nextLabel(piece, from) {
+    const order = H.LABELS.filter((l) => piece.texts[l] !== undefined).sort((a, b) => scoreOf(piece, b) - scoreOf(piece, a));
+    const i = order.indexOf(from);
+    return order[(i + 1) % order.length];
+  }
+  function scoreOf(piece, l) { return piece.scores ? piece.scores[l] : 0; }
+  function cycle(idx) {
+    const p = pieces[idx];
+    if (!p || p.kind !== "word") return;
+    const d = clf.decide(p.keys, "BR", null, true);
+    p.scores = d.scores; p.texts = d.texts;
+    const nl = nextLabel(p, p.label);
+    p.label = nl; p.text = d.texts[nl]; p.learned = true;
+    learn(p.keys, nl, d.split > 0 ? d.split : undefined);
+    if (idx === lastWordIndex()) prevLabel = nl;
+    render();
+  }
+  function lastWordIndex() { for (let i = pieces.length - 1; i >= 0; i--) if (pieces[i].kind === "word") return i; return -1; }
+  function undo() {
+    if (!clf) return;
+    if (buffer) {  // 조합 중: 표시 가설을 다음으로
+      const d = decide(buffer, false);
+      const avail = H.LABELS.filter((l) => d.texts[l] !== undefined).sort((a, b) => d.scores[b] - d.scores[a]);
+      const cur = displayed || d.label;
+      displayed = avail[(avail.indexOf(cur) + 1) % avail.length];
+      render();
+      return;
+    }
+    const i = lastWordIndex();
+    if (i >= 0) cycle(i);
+  }
+
+  function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+  function render() {
+    let html = "";
+    pieces.forEach((p, i) => {
+      if (p.kind === "sep") html += esc(p.ch);
+      else html += `<span class="w ${p.label}" data-i="${i}" title="클릭하면 다른 언어로 (${LABEL_KO[p.label]})">${esc(p.text)}</span>`;
+    });
+    if (buffer) {
+      const d = decide(buffer, false);
+      const label = pick(d);
+      displayed = label;
+      html += `<span class="marked ${label}"><span class="tag ${label}">${LABEL_KO[label]}</span>${esc(d.texts[label])}</span>`;
+    }
+    html += '<span class="caret"></span>';
+    editor.innerHTML = html;
+    hint.style.display = "none";
+    if (!pieces.length && !buffer) editor.insertBefore(hint, editor.firstChild), hint.style.display = "";
+
+    // 비교: 영어 상태 / 한글 상태 / Auto
+    const raw = pieces.map((p) => p.kind === "sep" ? p.ch : p.keys).join("") + buffer;
+    asEn.textContent = raw;
+    asKo.textContent = H.compose(raw).text;
+    asAuto.textContent = pieces.map((p) => p.kind === "sep" ? p.ch : p.text).join("") + (buffer ? decide(buffer, false).texts[displayed] : "");
+    // 어절 로그
+    log.innerHTML = pieces.filter((p) => p.kind === "word").slice(-14).map((p) => {
+      const i = pieces.indexOf(p);
+      return `<span class="chip ${p.label}" data-i="${i}"><b>${LABEL_KO[p.label]}</b>${esc(p.text)}<span class="lrn">${p.learned ? "학습됨" : "여유 " + p.margin.toFixed(1)}</span></span>`;
+    }).join("");
+  }
+
+  // 키 입력: 물리 키(e.code)로 받아 방문자의 OS 입력기 상태와 무관하게 동작한다
+  editor.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Escape") { e.preventDefault(); undo(); return; }
+    if (e.key === "Backspace") { e.preventDefault(); backspace(); return; }
+    if (e.key === "Enter") { e.preventDefault(); typeChar("\n"); return; }
+    if (e.code === "Space" || e.key === " ") { e.preventDefault(); typeChar(" "); return; }
+    const m = /^Key([A-Z])$/.exec(e.code);
+    if (m) { e.preventDefault(); typeChar(e.shiftKey ? m[1] : m[1].toLowerCase()); return; }
+    if (e.code === "Quote" && !e.shiftKey) { e.preventDefault(); typeChar("'"); return; }
+    if (e.key.length === 1 && !/[A-Za-z]/.test(e.key)) { e.preventDefault(); typeChar(e.key); return; }
+  });
+  editor.addEventListener("click", (e) => {
+    const w = e.target.closest(".w");
+    if (w) cycle(+w.dataset.i);
+    editor.focus();
+  });
+  log.addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (c) cycle(+c.dataset.i); });
+  $("undo").addEventListener("click", () => { undo(); editor.focus(); });
+  $("clear").addEventListener("click", () => { pieces = []; buffer = ""; displayed = null; prevLabel = "BR"; render(); editor.focus(); });
+
+  // 예시 자동 타이핑
+  const EXAMPLES = [  // 자연어로 적고 toKeys로 키열을 만든다
+    "한글을 씁니다 hello Slack에서 봤어요",
+    "오늘 standup은 skip할게요",
+    "html, css, sql 다 쓰고 있어요",
+    "ㅋㅋㅋ 진짜 웹사이트가 확 바뀌었어요",
+  ];
+  let typing = null;
+  function playExample(s) {
+    if (typing) clearInterval(typing);
+    pieces = []; buffer = ""; displayed = null; prevLabel = "BR"; render();
+    editor.focus();
+    const keys = Array.from(H.toKeys(s));
+    let i = 0;
+    typing = setInterval(() => {
+      if (i >= keys.length) { clearInterval(typing); typing = null; return; }
+      typeChar(keys[i++]);
+    }, 70);
+  }
+  const ex = $("examples");
+  for (const s of EXAMPLES) {
+    const b = document.createElement("button");
+    b.textContent = "▶ " + H.toKeys(s);
+    b.title = "이 키열을 자동으로 쳐 봅니다";
+    b.addEventListener("click", () => playExample(s));
+    ex.appendChild(b);
+  }
+
+  // 모델 로드
+  (async function load() {
+    try {
+      const t0 = performance.now();
+      const res = await fetch(MODEL_URL, { cache: "force-cache" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const reader = res.body.getReader();
+      const chunks = []; let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length;
+        status.textContent = `모델 내려받는 중… ${(got / 1e6).toFixed(1)} MB`;
+      }
+      const blob = new Blob(chunks);
+      const model = JSON.parse(await blob.text());
+      const t1 = performance.now();
+      clf = new H.Classifier(model);
+      const t2 = performance.now();
+      dot.classList.add("ok");
+      status.textContent = `준비됨 · 모델 ${(got / 1e6).toFixed(1)} MB, 내려받기 ${((t1 - t0) / 1000).toFixed(1)}s, 적재 ${Math.round(t2 - t1)}ms · 입력은 브라우저 밖으로 나가지 않습니다`;
+      editor.focus();
+    } catch (err) {
+      dot.classList.add("err");
+      status.textContent = "모델을 내려받지 못했습니다: " + err.message + " (네트워크를 확인하고 새로 고침)";
+    }
+  })();
+  render();
+})();
+</script>
+</body>
+</html>
