@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Auto HanYoung 체험</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b6e4f'/%3E%3Ctext x='32' y='43' font-size='30' font-weight='700' text-anchor='middle' fill='white' font-family='-apple-system,sans-serif'%3E한A%3C/text%3E%3C/svg%3E">
 <meta name="description" content="한/영 전환키 없이 그냥 타이핑하면 어절마다 한국어·영어를 알아서 판정하는 macOS 입력기 Auto HanYoung을 브라우저에서 체험합니다.">
 <style>
 :root {
@@ -441,6 +442,7 @@ a { color: var(--accent); }
   let pieces = [];       // {kind:"word", keys, text, label, texts, learned} | {kind:"sep", ch}
   let buffer = "";
   let displayed = null;  // 조합 중 어절의 표시 가설 (히스테리시스)
+  let forced = null;     // 조합 중 Esc로 사용자가 고른 가설. 확정 때 이것만 모델보다 우선한다
   let prevLabel = "BR";
   const userDict = {};   // keys → {label: count}
 
@@ -475,10 +477,11 @@ a { color: var(--accent); }
   function commit() {
     if (!buffer) return;
     const d = decide(buffer, true);
-    const label = displayed && d.texts[displayed] !== undefined ? displayed : d.label;
-    pieces.push({ kind: "word", keys: buffer, text: d.texts[label], label, texts: d.texts, model: d.label, margin: d.margin, split: d.split });
+    const label = forced && d.texts[forced] !== undefined ? forced : d.label;
+    pieces.push({ kind: "word", keys: buffer, text: d.texts[label], label, texts: d.texts, model: d.label, margin: d.margin, split: d.split, learned: !!forced && forced !== d.label });
+    if (forced && forced !== d.label) learn(buffer, forced, d.split > 0 ? d.split : undefined);
     prevLabel = label;
-    buffer = ""; displayed = null;
+    buffer = ""; displayed = null; forced = null;
   }
   function typeChar(ch) {
     if (!clf) return;
@@ -490,7 +493,7 @@ a { color: var(--accent); }
     if (buffer) buffer = buffer.slice(0, -1);
     else if (pieces.length) {
       const last = pieces.pop();
-      if (last.kind === "word") { buffer = last.keys; buffer = buffer.slice(0, -1); displayed = last.label; }
+      if (last.kind === "word") { buffer = last.keys.slice(0, -1); displayed = last.label; forced = null; }
       prevLabel = lastWordLabel();
     }
     render();
@@ -520,7 +523,7 @@ a { color: var(--accent); }
       const d = decide(buffer, false);
       const avail = H.LABELS.filter((l) => d.texts[l] !== undefined).sort((a, b) => d.scores[b] - d.scores[a]);
       const cur = displayed || d.label;
-      displayed = avail[(avail.indexOf(cur) + 1) % avail.length];
+      forced = displayed = avail[(avail.indexOf(cur) + 1) % avail.length];
       render();
       return;
     }
@@ -537,7 +540,7 @@ a { color: var(--accent); }
     });
     if (buffer) {
       const d = decide(buffer, false);
-      const label = pick(d);
+      const label = forced && d.texts[forced] !== undefined ? forced : pick(d);
       displayed = label;
       html += `<span class="marked ${label}"><span class="tag ${label}">${LABEL_KO[label]}</span>${esc(d.texts[label])}</span>`;
     }
@@ -577,7 +580,7 @@ a { color: var(--accent); }
   });
   log.addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (c) cycle(+c.dataset.i); });
   $("undo").addEventListener("click", () => { undo(); editor.focus(); });
-  $("clear").addEventListener("click", () => { pieces = []; buffer = ""; displayed = null; prevLabel = "BR"; render(); editor.focus(); });
+  $("clear").addEventListener("click", () => { pieces = []; buffer = ""; displayed = forced = null; prevLabel = "BR"; render(); editor.focus(); });
 
   // 예시 자동 타이핑
   const EXAMPLES = [  // 자연어로 적고 toKeys로 키열을 만든다
@@ -589,7 +592,7 @@ a { color: var(--accent); }
   let typing = null;
   function playExample(s) {
     if (typing) clearInterval(typing);
-    pieces = []; buffer = ""; displayed = null; prevLabel = "BR"; render();
+    pieces = []; buffer = ""; displayed = forced = null; prevLabel = "BR"; render();
     editor.focus();
     const keys = Array.from(H.toKeys(s));
     let i = 0;
