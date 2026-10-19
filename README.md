@@ -23,11 +23,21 @@ Slackdptj qhkTdjdy   →  Slack에서 봤어요
 
 ## 설치
 
-macOS 13 이상. Apple 공증은 되어 있지 않습니다.
+macOS 13 이상, Apple Silicon·Intel 모두. Apple 공증은 되어 있지 않습니다.
 
-**받아서 쓰기**: [Releases](https://github.com/jaeheeko/auto-hanyoung-ime/releases)에서 zip을 풀어 `Hanyoung.app`을 `~/Library/Input Methods/`에 넣고 로그아웃 후 로그인합니다.
+**AI에게 맡기기 (권장)**: Claude Code, Codex, Gemini CLI처럼 터미널을 쓸 수 있는 AI에게 아래 한 줄을 붙여 넣습니다. 내려받기·검증·설치·입력 소스 등록까지 AI가 하고, 끝나면 되돌리기 키 사용법을 알려 줍니다.
 
-**직접 빌드** (Xcode 또는 Command Line Tools 필요, 권장):
+```
+https://raw.githubusercontent.com/jaeheeko/auto-hanyoung-ime/main/INSTALL.md 를 읽고 그대로 따라서 Auto HanYoung을 설치해 줘.
+```
+
+**직접 한 줄로**: 터미널에서 아래를 실행합니다. [Releases](https://github.com/jaeheeko/auto-hanyoung-ime/releases)의 zip을 받아 설치하고 입력 소스로 등록·선택합니다. 로그아웃이 필요 없습니다. 같은 스크립트에 `--uninstall`을 주면 지웁니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jaeheeko/auto-hanyoung-ime/main/scripts/install-release.sh | bash
+```
+
+**직접 빌드** (Xcode 또는 Command Line Tools 필요):
 
 ```bash
 git clone https://github.com/jaeheeko/auto-hanyoung-ime.git && cd auto-hanyoung-ime
@@ -35,7 +45,7 @@ git clone https://github.com/jaeheeko/auto-hanyoung-ime.git && cd auto-hanyoung-
 ./scripts/install.sh    # 설치하고 입력 소스로 등록·선택한다
 ```
 
-메뉴 막대 입력 메뉴에서 **Auto HanYoung**을 고릅니다. 믿을 만해지면 다른 한국어 입력 소스와 ABC는 끄는 것을 권합니다.
+설치가 끝나면 메뉴 막대 입력 메뉴에 **Auto HanYoung**이 선택되어 있습니다. 믿을 만해지면 다른 한국어 입력 소스와 ABC는 끄는 것을 권합니다.
 
 오른쪽 ⌘를 F18로 바꿔 한/영 키로 쓰고 있었다면(hidutil·Karabiner 사용자에게 흔한 설정) 시스템 설정 › 키보드 › 키보드 단축키 › 입력 소스에서 "이전/다음 입력 소스 선택"을 끕니다. 그 키가 그대로 이 입력기의 되돌리기 키가 됩니다.
 

@@ -1,10 +1,12 @@
 // 입력기 번들을 TIS에 등록하고 입력 소스를 활성화한다. --select를 주면 현재 입력 소스로 바꾼다.
-// 사용: register <path/to/Hanyoung.app> [--select]
+// --disable을 주면 반대로 입력 소스에서 뺀다(삭제 전).
+// 사용: register <path/to/Hanyoung.app> [--select|--disable]
 import Carbon
 import Foundation
 
 let args = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("--") }
 let doSelect = CommandLine.arguments.contains("--select")
+let doDisable = CommandLine.arguments.contains("--disable")
 let path = args.first ?? NSString(string: "~/Library/Input Methods/Hanyoung.app").expandingTildeInPath
 let url = URL(fileURLWithPath: path)
 let status = TISRegisterInputSource(url as CFURL)
@@ -22,6 +24,11 @@ for source in list {
         return Unmanaged<CFString>.fromOpaque(p).takeUnretainedValue() as String
     }
     let id = prop(kTISPropertyInputSourceID)
+    if doDisable {
+        let st = TISDisableInputSource(source)
+        print("disable \(id): \(st == noErr ? "ok" : "status \(st)")")
+        continue
+    }
     let enable = TISEnableInputSource(source)
     let enabled = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsEnabled)
         .map { CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque($0).takeUnretainedValue()) } ?? false
