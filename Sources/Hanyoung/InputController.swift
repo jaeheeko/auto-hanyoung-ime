@@ -4,7 +4,9 @@ import Engine
 
 /// 되돌리기(한/영) 키의 뜻은 상황에 따라 다르다. 한/영 키를 언어가 바뀌는 자리마다 누르던 습관과 충돌하지 않게 한다.
 ///   어절 중간에서 한 번     → 여기서 언어가 바뀐다. 앞부분은 보이는 대로 고정, 뒤는 반대 언어
-///   어절 사이(빈 상태) 한 번 → 다음 어절은 반대 언어로 시작한다 (화면 변화 없음)
+///   어절 끝에서 한 번        → 다음 어절은 반대 언어로 시작한다. 스페이스를 쳐도 힌트가 다음 어절까지 이어진다
+///   어절 사이(빈 상태) 한 번 → 다음 어절은 반대 언어로 시작한다
+///   어느 쪽이든 한 번 톡은 커서 옆에 A/한 말풍선으로 잠깐 보인다. 힌트는 다음 한 어절에만 적용된다.
 ///   빈 상태에서 두 번 연타  → 커서 앞(또는 커서가 닿은) 어절을 다음 가설로
 ///   선택 영역이 있을 때     → 선택한 글자를 반대 언어로
 @objc(HanyoungInputController)
@@ -17,6 +19,7 @@ public final class HanyoungInputController: IMKInputController {
     private var displayed: Label? = nil           // 현재 구간을 marked text로 보여 주는 가설
     private var forced: Set<Label>? = nil         // 현재 구간에 허용된 가설 (되돌리기 키·힌트로 제한)
     private var forcedByHint = false              // forced가 어절 사이 한 번 톡(힌트)에서 왔는지. 습관 누름일 수 있어 학습하지 않는다
+    private var tappedAtEnd = false               // 어절 중간 톡 뒤 아무것도 안 친 상태. 이대로 확정되면 톡의 뜻이 다음 어절로 넘어간다
     private var pendingAllowed: Set<Label>? = nil // 빈 상태에서 톡: 다음 어절이 시작할 언어
     private var prevLabel: Label? = nil           // 직전 어절 라벨 (문맥 사전확률)
     private var lastTail: Label = .ko             // 마지막 어절이 끝난 언어. 한/영 힌트의 기준
@@ -84,6 +87,7 @@ public final class HanyoungInputController: IMKInputController {
 
         switch event.keyCode {
         case 51, 117:  // delete, forward delete
+            tappedAtEnd = false
             if !buffer.isEmpty {
                 buffer.removeLast()
             } else if let last = fixed.popLast() {
@@ -130,14 +134,19 @@ public final class HanyoungInputController: IMKInputController {
                 // 한/영 힌트가 걸려 있으면 새 어절은 그 언어로 시작한다
                 forced = p
                 pendingAllowed = nil
+                HintBubble.shared.hide()
             }
+            tappedAtEnd = false
             buffer.append(ch)
             updateMarked(client)
             return true
         }
         // 공백·숫자·문장부호: 어절 경계. 확정하고 키는 앱에 넘긴다.
-        commit(client)
-        pendingAllowed = nil
+        // 어절 끝에서 톡한 뒤 스페이스를 쳤으면(한/영 키 뒤 스페이스 습관) 힌트가 다음 어절로 넘어간다.
+        // 조합 중이 아니었으면 걸려 있던 힌트를 그대로 둔다(톡 → 스페이스 → 단어).
+        let wasComposing = !buffer.isEmpty || !fixed.isEmpty
+        let carried = commit(client)
+        if wasComposing { pendingAllowed = carried }
         return false
     }
 
@@ -221,8 +230,11 @@ public final class HanyoungInputController: IMKInputController {
 
     // MARK: - 확정
 
-    private func commit(_ client: IMKTextInput) {
-        guard !buffer.isEmpty || !fixed.isEmpty else { return }
+    /// 확정한다. 어절 끝에서 톡한 채 확정됐으면(톡 뒤 아무것도 안 침) 그 톡의 뜻, 즉 다음 어절이 시작할 언어를 돌려준다.
+    @discardableResult
+    private func commit(_ client: IMKTextInput) -> Set<Label>? {
+        guard !buffer.isEmpty || !fixed.isEmpty else { return nil }
+        let carried = tappedAtEnd && buffer.isEmpty ? forced : nil
         var segments = fixed
         var model: Label? = nil
         var margin = 0.0
@@ -262,6 +274,8 @@ public final class HanyoungInputController: IMKInputController {
         displayed = nil
         forced = nil
         forcedByHint = false
+        tappedAtEnd = false
+        return carried
     }
 
     public override func commitComposition(_ sender: Any!) {
@@ -292,7 +306,9 @@ public final class HanyoungInputController: IMKInputController {
             buffer = []
             displayed = nil
             forced = Self.startsOpposite(of: label)
+            tappedAtEnd = true
             updateMarked(client)
+            HintBubble.shared.show(forced!, near: client)
             return
         }
         if !fixed.isEmpty {
@@ -320,8 +336,9 @@ public final class HanyoungInputController: IMKInputController {
             undoAtCaret(client, caret: sel)
             return
         }
-        // 한 번 톡: 다음 어절은 반대 언어로 시작한다 (한/영 키 습관). 화면은 바뀌지 않는다.
+        // 한 번 톡: 다음 어절은 반대 언어로 시작한다 (한/영 키 습관). 커서 옆에 A/한으로 잠깐 보인다.
         pendingAllowed = Self.startsOpposite(of: lastTail)
+        HintBubble.shared.show(pendingAllowed!, near: client)
         runtime.log(["event": "hint", "app": client.bundleIdentifier() ?? "", "after": lastTail.rawValue])
     }
 
