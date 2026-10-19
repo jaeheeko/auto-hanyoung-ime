@@ -54,7 +54,9 @@ git clone https://github.com/jaeheeko/auto-hanyoung-ime.git && cd auto-hanyoung-
 
 한 번 톡하면 커서 옆에 다음 글자의 언어가 `A` 또는 `한`으로 잠깐 보입니다.
 
-고친 어절은 사용자 사전에 학습되어 조사가 붙은 변형과 대문자 변형에도 적용됩니다. 지우고 다시 치는 방식은 입력기가 교정으로 알 수 없으니 위 네 가지로 고쳐야 학습됩니다.
+**지우고 다시 쳐도 됩니다.** 틀린 어절을 백스페이스로 지우고 같은 키를 다시 치면 다른 언어로 바뀝니다. 한 번 더 지우고 다시 치면 그다음 가설로 넘어갑니다. 원래 판정이 아슬아슬했던 어절에만 적용되고(`hello`처럼 확실한 어절은 그대로), 바뀐 결과는 한/영 키로 고친 것과 똑같이 학습됩니다.
+
+고친 어절은 사용자 사전에 학습되어 조사가 붙은 변형과 대문자 변형에도 적용됩니다.
 
 ### 개인화 (선택)
 
@@ -66,7 +68,7 @@ python3 -I tools/personalize.py ~/Documents/notes
 
 ### 설정
 
-`~/Library/Application Support/Hanyoung/config.json`에서 앱별 기본값(`appBias`, 예: 터미널은 영어 쪽), 자동 판정을 끌 앱(`disabledApps`), 되돌리기 키(`toggleKeyCodes`)를 바꿀 수 있습니다. 판정 로그는 같은 폴더의 `log.jsonl`에 로컬로만 남습니다.
+`~/Library/Application Support/Hanyoung/config.json`에서 앱별 기본값(`appBias`, 예: 터미널은 영어 쪽), 자동 판정을 끌 앱(`disabledApps`), 되돌리기 키(`toggleKeyCodes`), 지우고 다시 치기가 발동할 판정 격차 상한(`retypeMargin`, 기본 10, 0이면 끔)을 바꿀 수 있습니다. 판정 로그는 같은 폴더의 `log.jsonl`에 로컬로만 남습니다.
 
 ## 알려진 한계
 

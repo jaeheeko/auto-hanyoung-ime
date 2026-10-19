@@ -31,6 +31,9 @@ struct Config {
     static let learnWeight = 20.0
     var userDictWeight = 10.0   // 교정 1회로 격차 10점까지 뒤집힌다. 실사용 오판 격차는 1~17점.
     var userDictMaxCount = 3
+    /// 어절을 지우고 같은 키열을 다시 치면 다음 가설로 바꾸는 기능이 발동할 원래 판정 격차 상한. 0이면 끈다.
+    /// 로그상 실제 교정 22건 중 14건이 격차 8 미만, 다른 이유의 재입력은 대부분 13 이상.
+    var retypeMargin = 10.0
 
     static func load(from url: URL) -> Config {
         var c = Config()
@@ -45,6 +48,7 @@ struct Config {
         }
         if let disabled = json["disabledApps"] as? [String] { c.disabledApps = Set(disabled) }
         if let h = (json["hysteresis"] as? NSNumber)?.doubleValue { c.hysteresis = h }
+        if let r = (json["retypeMargin"] as? NSNumber)?.doubleValue { c.retypeMargin = r }
         if let k = (json["toggleKeyCode"] as? NSNumber)?.uint16Value { c.toggleKeyCodes = [k] }
         if let ks = json["toggleKeyCodes"] as? [NSNumber] { c.toggleKeyCodes = Set(ks.map { $0.uint16Value }) }
         return c

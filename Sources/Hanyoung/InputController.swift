@@ -9,6 +9,7 @@ import Engine
 ///   어느 쪽이든 한 번 톡은 커서 옆에 A/한 말풍선으로 잠깐 보인다. 힌트는 다음 한 어절에만 적용된다.
 ///   빈 상태에서 두 번 연타  → 커서 앞(또는 커서가 닿은) 어절을 다음 가설로
 ///   선택 영역이 있을 때     → 선택한 글자를 반대 언어로
+/// 되돌리기 키 없이 어절을 지우고 같은 키열을 다시 치면, 언어가 틀렸다고 보고 다음 가설로 바꾼다(원래 판정 격차가 작을 때만).
 @objc(HanyoungInputController)
 public final class HanyoungInputController: IMKInputController {
     /// 어절 중간에서 가른 앞부분. 글자는 가른 시점에 보이던 대로 고정된다.
@@ -23,7 +24,12 @@ public final class HanyoungInputController: IMKInputController {
     private var pendingAllowed: Set<Label>? = nil // 빈 상태에서 톡: 다음 어절이 시작할 언어
     private var prevLabel: Label? = nil           // 직전 어절 라벨 (문맥 사전확률)
     private var lastTail: Label = .ko             // 마지막 어절이 끝난 언어. 한/영 힌트의 기준
-    private var lastCommit: (text: String, keys: String, label: Label)? = nil
+    private var lastCommit: (text: String, keys: String, label: Label, margin: Double)? = nil
+    private var lastCommitAt = Date.distantPast
+    private var deletedAfterCommit = 0            // 빈 상태에서 백스페이스로 지운 글자 수. 직전 어절을 정확히 지웠는지 본다
+    private var retype: (keys: String, label: Label, margin: Double)? = nil  // 지운 어절. 같은 키열을 다시 치면 다음 가설로
+    private var forcedByRetype = false
+    private static let retypeWindow: TimeInterval = 20
     private var lastTap: Date? = nil              // 되돌리기 키 연타 판정
     private var toggleDown = false                // 조합키형 되돌리기 키가 눌린 상태
     private var otherKeyDuringToggle = false
@@ -82,6 +88,11 @@ public final class HanyoungInputController: IMKInputController {
         if flags.contains(.command) || flags.contains(.control) || flags.contains(.option) {
             commit(client)
             pendingAllowed = nil
+            if event.keyCode == 51, flags == [.option], let lc = lastCommit, endsWithLastCommit(client, lc.text) {
+                deletedAfterCommit = (lc.text as NSString).length + 1   // ⌥⌫는 앞 어절(과 공백)을 지운다
+            } else {
+                lastCommit = nil
+            }
             return false
         }
 
@@ -96,10 +107,13 @@ public final class HanyoungInputController: IMKInputController {
                 forced = [last.label]
                 buffer.removeLast()
             } else {
-                lastCommit = nil
+                // 확정된 글자를 지운다. 직전 어절을 정확히 지우고 같은 키열을 다시 치면 언어를 바꿔 준다.
+                deletedAfterCommit += 1
+                if let lc = lastCommit, deletedAfterCommit > (lc.text as NSString).length + 1 { lastCommit = nil }
                 pendingAllowed = nil
                 return false
             }
+            applyRetype(client)
             updateMarked(client)
             return true
         case 36, 76:   // return, enter
@@ -136,8 +150,10 @@ public final class HanyoungInputController: IMKInputController {
                 pendingAllowed = nil
                 HintBubble.shared.hide()
             }
+            if buffer.isEmpty, fixed.isEmpty { startRetypeIfDeleted() }
             tappedAtEnd = false
             buffer.append(ch)
+            applyRetype(client)
             updateMarked(client)
             return true
         }
@@ -254,7 +270,8 @@ public final class HanyoungInputController: IMKInputController {
         prevLabel = last
         lastTail = Self.tail(last)
         if segments.count == 1 {
-            lastCommit = (text, keys, last)
+            // 재입력으로 바꾼 어절은 격차 0으로 둬서 또 지우고 다시 치면 그다음 가설로 넘어간다
+            lastCommit = (text, keys, last, forcedByRetype ? 0 : margin)
             // 되돌리기·가르기 취소로 모델과 다른 결과가 됐으면 사용자가 결과를 보고 고친 것이니 학습한다.
             // 어절 사이 한 번 톡(힌트)은 옛 습관으로 누른 것일 수 있어(menubar→ㅡ두ㅕㅠㅁㄱ) 학습하지 않는다.
             if forced != nil, !forcedByHint, let m = model, m != last { runtime.learn(keys, last) }
@@ -268,12 +285,16 @@ public final class HanyoungInputController: IMKInputController {
         runtime.log(["event": "commit", "app": client.bundleIdentifier() ?? "", "keys": keys,
                      "label": segments.map(\.label.rawValue).joined(separator: "+"), "text": text,
                      "forced": forced != nil || segments.count > 1, "model": model?.rawValue ?? "",
-                     "margin": (margin * 10).rounded() / 10])
+                     "margin": (margin * 10).rounded() / 10, "retype": forcedByRetype])
+        lastCommitAt = Date()
+        deletedAfterCommit = 0
+        retype = nil
         buffer = []
         fixed = []
         displayed = nil
         forced = nil
         forcedByHint = false
+        forcedByRetype = false
         tappedAtEnd = false
         return carried
     }
@@ -288,6 +309,64 @@ public final class HanyoungInputController: IMKInputController {
         prevLabel = nil
         lastCommit = nil
         pendingAllowed = nil
+    }
+
+    // MARK: - 지우고 다시 치기
+
+    /// 새 어절의 첫 글자를 칠 때: 직전 어절을 정확히(어절 길이, 또는 +공백) 지운 뒤라면 재입력 후보로 삼는다.
+    private func startRetypeIfDeleted() {
+        defer { deletedAfterCommit = 0 }
+        guard runtime.config.retypeMargin > 0, let lc = lastCommit,
+              Date().timeIntervalSince(lastCommitAt) < Self.retypeWindow else { retype = nil; return }
+        let len = (lc.text as NSString).length
+        retype = (deletedAfterCommit == len || deletedAfterCommit == len + 1) ? (lc.keys, lc.label, lc.margin) : nil
+    }
+
+    /// 조합 중인 키열이 지운 어절과 같아지면 다음 가설로 강제한다. 더 치거나 달라지면 푼다.
+    private func applyRetype(_ client: IMKTextInput) {
+        guard let r = retype, fixed.isEmpty else { return }
+        let keys = String(buffer)
+        if keys == r.keys {
+            guard r.margin < runtime.config.retypeMargin else { retype = nil; return }
+            let d = decide(client, keys: keys, final: true)
+            if let next = Self.nextValidLabel(d, keys: keys, after: r.label) {
+                forced = [next]
+                forcedByRetype = true
+                forcedByHint = false
+            }
+        } else if forcedByRetype {
+            forced = nil
+            forcedByRetype = false
+            if !r.keys.hasPrefix(keys) { retype = nil }
+        } else if !r.keys.hasPrefix(keys) {
+            retype = nil
+        }
+    }
+
+    /// `after` 다음 가설 중 멀쩡한 것. 한국어는 낱자모·잘못된 대문자가 없어야 한다(hello→ㅗ디ㅣㅐ 방지).
+    private static func nextValidLabel(_ d: Decision, keys: String, after: Label) -> Label? {
+        let order = d.texts.keys.sorted { d.scores[$0]! > d.scores[$1]! }
+        guard let i = order.firstIndex(of: after) else { return nil }
+        for step in 1..<order.count {
+            let l = order[(i + step) % order.count]
+            if l == .ko {
+                let c = Hangul.compose(keys)
+                if c.lone > 0 || c.shiftBad > 0 { continue }
+            }
+            return l
+        }
+        return nil
+    }
+
+    /// 캐럿 바로 앞 글자가 `text`(뒤에 공백 하나까지 허용)로 끝나는지
+    private func endsWithLastCommit(_ client: IMKTextInput, _ text: String) -> Bool {
+        let sel = client.selectedRange()
+        guard sel.location != NSNotFound, sel.length == 0 else { return false }
+        let n = (text as NSString).length + 1
+        guard sel.location >= n - 1 else { return false }
+        let start = max(0, sel.location - n)
+        guard let before = client.attributedSubstring(from: NSRange(location: start, length: sel.location - start))?.string else { return false }
+        return before.hasSuffix(text) || before.hasSuffix(text + " ")
     }
 
     // MARK: - 되돌리기 키
@@ -364,7 +443,9 @@ public final class HanyoungInputController: IMKInputController {
         let newLabel = Self.nextLabel(d, after: from)
         guard let newText = d.texts[newLabel] else { return }
         client.insertText(newText, replacementRange: range)
-        lastCommit = (newText, keys, newLabel)
+        lastCommit = (newText, keys, newLabel, 0)
+        lastCommitAt = Date()
+        deletedAfterCommit = 0
         prevLabel = newLabel
         lastTail = Self.tail(newLabel)
         runtime.learn(keys, newLabel)
@@ -419,7 +500,9 @@ public final class HanyoungInputController: IMKInputController {
         for l in learned { runtime.learn(l.keys, l.label) }
         if learned.count == 1, let l = learned.first, out == l.text {
             // 어절 하나를 바꿨으면 연타로 다음 가설까지 돌 수 있게 기억한다
-            lastCommit = (l.text, l.keys, l.label)
+            lastCommit = (l.text, l.keys, l.label, 0)
+            lastCommitAt = Date()
+            deletedAfterCommit = 0
             prevLabel = l.label
             lastTail = Self.tail(l.label)
         } else {
