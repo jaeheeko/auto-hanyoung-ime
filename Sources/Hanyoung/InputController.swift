@@ -27,8 +27,12 @@ public final class HanyoungInputController: IMKInputController {
     private var lastCommit: (text: String, keys: String, label: Label, margin: Double)? = nil
     private var lastCommitAt = Date.distantPast
     private var deletedAfterCommit = 0            // 빈 상태에서 백스페이스로 지운 글자 수. 직전 어절을 정확히 지웠는지 본다
-    private var retype: (keys: String, label: Label, margin: Double)? = nil  // 지운 어절. 같은 키열을 다시 치면 다음 가설로
+    private var retype: (keys: String, label: Label, margin: Double, tried: [Label])? = nil  // 지운 어절. 같은 키열을 다시 치면 다음 가설로
     private var forcedByRetype = false
+    private var retypeTried: (keys: String, tried: [Label])? = nil  // 같은 키열을 거듭 다시 칠 때 이미 보여 준 가설들
+    /// 재입력으로 바뀐 어절의 학습은 사용자가 그 어절을 지우지 않고 다음으로 넘어갔을 때 한다.
+    /// 바로 학습하면 뒤집을 때마다 점수가 쌓여 격차가 커지고, 몇 번 돌기도 전에 재입력이 막힌다(duro 사례).
+    private var pendingLearn: (keys: String, label: Label)? = nil
     private static let retypeWindow: TimeInterval = 20
     private var lastTap: Date? = nil              // 되돌리기 키 연타 판정
     private var toggleDown = false                // 조합키형 되돌리기 키가 눌린 상태
@@ -91,6 +95,7 @@ public final class HanyoungInputController: IMKInputController {
             if event.keyCode == 51, flags == [.option], let lc = lastCommit, endsWithLastCommit(client, lc.text) {
                 deletedAfterCommit = (lc.text as NSString).length + 1   // ⌥⌫는 앞 어절(과 공백)을 지운다
             } else {
+                flushPendingLearn()
                 lastCommit = nil
             }
             return false
@@ -118,17 +123,20 @@ public final class HanyoungInputController: IMKInputController {
             return true
         case 36, 76:   // return, enter
             commit(client)
+            flushPendingLearn()
             prevLabel = nil
             lastCommit = nil
             pendingAllowed = nil
             return false
         case 48, 53:   // tab, escape
             commit(client)
+            flushPendingLearn()
             lastCommit = nil
             pendingAllowed = nil
             return false
         case 123...126, 115, 119, 116, 121:  // arrows, home, end, page up/down
             commit(client)
+            flushPendingLearn()
             prevLabel = nil
             lastCommit = nil
             pendingAllowed = nil
@@ -269,12 +277,23 @@ public final class HanyoungInputController: IMKInputController {
         let last = segments.last!.label
         prevLabel = last
         lastTail = Self.tail(last)
+        // 앞 어절이 재입력으로 바뀐 채 남아 있고 지금 다른 어절을 확정했으면, 그 결과를 받아들인 것이니 학습한다
+        if let p = pendingLearn {
+            if p.keys != keys { runtime.learn(p.keys, p.label) }
+            pendingLearn = nil
+        }
+        if retypeTried?.keys != keys { retypeTried = nil }
         if segments.count == 1 {
             // 재입력으로 바꾼 어절은 격차 0으로 둬서 또 지우고 다시 치면 그다음 가설로 넘어간다
             lastCommit = (text, keys, last, forcedByRetype ? 0 : margin)
-            // 되돌리기·가르기 취소로 모델과 다른 결과가 됐으면 사용자가 결과를 보고 고친 것이니 학습한다.
-            // 어절 사이 한 번 톡(힌트)은 옛 습관으로 누른 것일 수 있어(menubar→ㅡ두ㅕㅠㅁㄱ) 학습하지 않는다.
-            if forced != nil, !forcedByHint, let m = model, m != last { runtime.learn(keys, last) }
+            if forcedByRetype {
+                pendingLearn = (keys, last)
+                retypeTried = (keys, (retype?.tried ?? [last]) + [last])
+            } else if forced != nil, !forcedByHint, let m = model, m != last {
+                // 되돌리기·가르기 취소로 모델과 다른 결과가 됐으면 사용자가 결과를 보고 고친 것이니 학습한다.
+                // 어절 사이 한 번 톡(힌트)은 옛 습관으로 누른 것일 수 있어(menubar→ㅡ두ㅕㅠㅁㄱ) 학습하지 않는다.
+                runtime.learn(keys, last)
+            }
         } else {
             lastCommit = nil
             // 영어|한국어로 가른 어절은 혼합 어절로 학습한다
@@ -306,6 +325,7 @@ public final class HanyoungInputController: IMKInputController {
 
     public override func deactivateServer(_ sender: Any!) {
         if let client = sender as? IMKTextInput { commit(client) }
+        flushPendingLearn()
         prevLabel = nil
         lastCommit = nil
         pendingAllowed = nil
@@ -316,10 +336,19 @@ public final class HanyoungInputController: IMKInputController {
     /// 새 어절의 첫 글자를 칠 때: 직전 어절을 정확히(어절 길이, 또는 +공백) 지운 뒤라면 재입력 후보로 삼는다.
     private func startRetypeIfDeleted() {
         defer { deletedAfterCommit = 0 }
+        if deletedAfterCommit > 0 { pendingLearn = nil }   // 바뀐 어절을 지웠으면 받아들인 게 아니다
         guard runtime.config.retypeMargin > 0, let lc = lastCommit,
               Date().timeIntervalSince(lastCommitAt) < Self.retypeWindow else { retype = nil; return }
         let len = (lc.text as NSString).length
-        retype = (deletedAfterCommit == len || deletedAfterCommit == len + 1) ? (lc.keys, lc.label, lc.margin) : nil
+        guard deletedAfterCommit == len || deletedAfterCommit == len + 1 else { retype = nil; return }
+        let tried = retypeTried?.keys == lc.keys ? retypeTried!.tried : [lc.label]
+        retype = (lc.keys, lc.label, lc.margin, tried)
+    }
+
+    /// 보류된 재입력 학습을 확정한다. 그 어절을 지우는 중이었으면 버린다.
+    private func flushPendingLearn() {
+        if let p = pendingLearn, deletedAfterCommit == 0 { runtime.learn(p.keys, p.label) }
+        pendingLearn = nil
     }
 
     /// 조합 중인 키열이 지운 어절과 같아지면 다음 가설로 강제한다. 더 치거나 달라지면 푼다.
@@ -329,7 +358,7 @@ public final class HanyoungInputController: IMKInputController {
         if keys == r.keys {
             guard r.margin < runtime.config.retypeMargin else { retype = nil; return }
             let d = decide(client, keys: keys, final: true)
-            if let next = Self.nextValidLabel(d, keys: keys, after: r.label) {
+            if let next = Self.nextValidLabel(d, keys: keys, after: r.label, tried: r.tried) {
                 forced = [next]
                 forcedByRetype = true
                 forcedByHint = false
@@ -343,19 +372,25 @@ public final class HanyoungInputController: IMKInputController {
         }
     }
 
-    /// `after` 다음 가설 중 멀쩡한 것. 한국어는 낱자모·잘못된 대문자가 없어야 한다(hello→ㅗ디ㅣㅐ 방지).
-    private static func nextValidLabel(_ d: Decision, keys: String, after: Label) -> Label? {
-        let order = d.texts.keys.sorted { d.scores[$0]! > d.scores[$1]! }
-        guard let i = order.firstIndex(of: after) else { return nil }
-        for step in 1..<order.count {
-            let l = order[(i + step) % order.count]
+    /// `after` 대신 보여 줄 가설. 반대 언어를 먼저(영어 duro → 여개, du개가 아니라), 그다음 점수 순.
+    /// 이미 보여 준 가설(`tried`)은 뒤로 미루고, 한국어는 낱자모·잘못된 대문자가 없어야 한다(hello→ㅗ디ㅣㅐ 방지).
+    private static func nextValidLabel(_ d: Decision, keys: String, after: Label, tried: [Label]) -> Label? {
+        let byScore = d.texts.keys.sorted { d.scores[$0]! > d.scores[$1]! }
+        let preferred: [Label]
+        switch after {
+        case .en: preferred = [.ko, .mix]
+        case .ko: preferred = [.en, .mix]
+        case .mix: preferred = byScore
+        }
+        let candidates = preferred.filter { l in
+            guard l != after, d.texts[l] != nil else { return false }
             if l == .ko {
                 let c = Hangul.compose(keys)
-                if c.lone > 0 || c.shiftBad > 0 { continue }
+                if c.lone > 0 || c.shiftBad > 0 { return false }
             }
-            return l
+            return true
         }
-        return nil
+        return candidates.first { !tried.contains($0) } ?? candidates.first
     }
 
     /// 캐럿 바로 앞 글자가 `text`(뒤에 공백 하나까지 허용)로 끝나는지
@@ -439,6 +474,7 @@ public final class HanyoungInputController: IMKInputController {
 
     /// 확정된 어절을 다음 가설로 바꾼다. 연타하면 계속 돈다.
     private func cycle(_ client: IMKTextInput, range: NSRange, keys: String, from: Label) {
+        pendingLearn = nil
         let d = runtime.classifier.decide(keys, prev: "BR", final: true)
         let newLabel = Self.nextLabel(d, after: from)
         guard let newText = d.texts[newLabel] else { return }
