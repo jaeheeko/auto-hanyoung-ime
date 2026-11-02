@@ -140,7 +140,8 @@
 
   class WordModel {
     constructor(lm, lex, lam, caseFold, foldWeight) {
-      this.lm = lm; this.lex = lex; this.lam = lam; this.caseFold = caseFold; this.foldWeight = foldWeight || 0.3;
+      // 프로토타입을 끊는다. 안 그러면 valueOf·toString 같은 입력이 Object.prototype의 함수를 찾아 NaN이 된다.
+      this.lm = lm; this.lex = Object.setPrototypeOf(lex, null); this.lam = lam; this.caseFold = caseFold; this.foldWeight = foldWeight || 0.3;
       this.total = 0;
       for (const w in lex) this.total += lex[w];
     }
@@ -162,6 +163,23 @@
   // ---------- 판정기 ----------
   const EMOTICON_RUN_KEYS = new Set("zgbn");
   const LABELS = ["KO", "EN", "MIX"];
+  // 어절 안의 따옴표. 점수를 매길 때는 떼고 보고, 렌더링에는 그대로 남긴다.
+  const QUOTES = new Set("'\"");
+  const stripQuotes = (keys) => { let o = ""; for (const c of keys) if (!QUOTES.has(c)) o += c; return o; };
+  /** 따옴표를 뗀 키열의 분할점을 원래 키열의 인덱스로. 분할점 바로 뒤의 따옴표는 접두에 붙인다 ('빛'을). */
+  function unstripIndex(keys, split) {
+    let cnt = 0, j = 0;
+    while (j < keys.length && cnt < split) { if (!QUOTES.has(keys[j])) cnt++; j++; }
+    while (j < keys.length - 1 && QUOTES.has(keys[j])) j++;
+    return j;
+  }
+  // 영어 단어 뒤에 붙는 조사·서술격 꼬리. 앱의 UserDict.particles와 같다.
+  const PARTICLES = new Set(`
+    은 는 이 가 을 를 의 에 에서 로 으로 와 과 도 만 부터 까지 처럼 보다 께서 에게 한테 랑 이랑 라는 이라는 라고 이라고
+    로서 로써 으로서 으로써 마다 조차 밖에 뿐 대로 에서는 에는 에도 로는 으로는 로도 으로도 와는 과는 와도 과도
+    요 은요 는요 이요 이나 나 이란 란 이든 든 이며 며 하고 에게는 에게도 한테는 한테도 께 께는 로의 으로의 에서의 와의 과의
+    이라면 라면 이라서 라서 이라도 라도 이야 야 이고 고 인데 인 임 입니다 이다 였다 이었다 이지 지 이죠 죠 이네 네 이면 면
+  `.trim().split(/\s+/));
 
   function collapseRuns(keys) {
     let out = "", extra = 0;
@@ -187,6 +205,7 @@
   class Classifier {
     constructor(model) {
       this.p = model.params;
+      Object.setPrototypeOf(this.p.jamo_lex, null);
       this.jamoTotal = 0;
       for (const k in this.p.jamo_lex) this.jamoTotal += this.p.jamo_lex[k];
       this.ko = new WordModel(CharLM.fromJSON(model.ko), model.ko.lex, model.ko.lam, false, 0);
@@ -205,7 +224,7 @@
       weight = weight || 20;
       if (label === "EN") this.en.addCounts({ [keys]: weight });
       else if (label === "KO") this.ko.addCounts({ [Classifier.canon(keys)]: weight });
-      else { const i = split != null ? split : this.mixLoglik(keys, true)[2]; if (i > 0) this.en.addCounts({ [keys.slice(0, i)]: weight }); }
+      else { const i = split != null ? split : this.decide(keys).split; if (i > 0) this.en.addCounts({ [stripQuotes(keys.slice(0, i))]: weight }); }
     }
     static canon(keys) {
       let out = "";
@@ -260,11 +279,19 @@
       const n = keys.length;
       for (let i = Math.max(this.p.min_prefix, n - this.p.max_suffix); i < n; i++) {
         const prefix = keys.slice(0, i), suffix = keys.slice(i);
-        const letters = prefix.replace(/'/g, "");
+        const letters = stripQuotes(prefix);
         if (!/^[A-Za-z]+$/.test(letters)) continue;
+        let penalty = this.p.mix_penalty;
+        // 소문자 접두의 MIX 억제(cot과의, cof시네). 1글자·대문자 접두는 그대로.
+        if (letters.length >= 2 && /^[a-z]+$/.test(letters)) {
+          const c = this.en.lex[letters] || 0;
+          const short = letters.length <= (this.p.short_prefix_max_len ?? 3);
+          if (c <= 0 && short) continue;
+          if (c <= 0 || (short && c < (this.p.short_prefix_min_count ?? 5))) penalty += this.p.short_prefix_penalty ?? 8;
+        }
         const [sLp, sText] = this.suffixLoglik(suffix, final);
         if (sLp === -Infinity) continue;
-        const lp = this.en.logprob(prefix, true) + sLp - this.p.mix_penalty;
+        const lp = this.en.logprob(prefix, true) + sLp - penalty;
         if (lp > best[0]) best = [lp, prefix + sText, i];
       }
       return best;
@@ -274,20 +301,35 @@
       if (prev === undefined) prev = "BR";
       if (final === undefined) final = true;
       const prior = this.p.prior[prev] || this.p.prior.BR || {};
-      const [koLp, koText] = this.koLoglik(keys, final);
-      const [enLp, enText] = this.enLoglik(keys, final);
-      const [mixLp, mixText, split] = this.mixLoglik(keys, final);
+      let koLp, koText, enLp, enText, mixLp, mixText, split;
+      const stripped = stripQuotes(keys);
+      if (stripped && stripped.length !== keys.length) {
+        // 따옴표는 점수에서 빼고 렌더링에만 남긴다
+        koLp = this.koLoglik(stripped, final)[0];
+        koText = compose(keys).text;
+        enLp = Math.max(this.en.logprob(keys, final), this.en.logprob(stripped, final));
+        enText = keys;
+        const m = this.mixLoglik(stripped, final);
+        mixLp = m[0];
+        if (m[2] > 0) { split = unstripIndex(keys, m[2]); mixText = keys.slice(0, split) + compose(keys.slice(split)).text; }
+        else { split = -1; mixText = ""; }
+      } else {
+        [koLp, koText] = this.koLoglik(keys, final);
+        [enLp, enText] = this.enLoglik(keys, final);
+        [mixLp, mixText, split] = this.mixLoglik(keys, final);
+      }
       const scores = { KO: koLp + (prior.KO || 0), EN: enLp + (prior.EN || 0), MIX: mixLp + (prior.MIX || 0) };
       if (bias) for (const k in bias) scores[k] += bias[k];
       const ranked = LABELS.slice().sort((a, b) => scores[b] - scores[a]);
       const texts = { KO: koText, EN: enText };
       if (mixLp > -Infinity) texts.MIX = mixText;
       const label = ranked[0];
-      return { label, text: texts[label], texts, scores, split: label === "MIX" ? split : -1, margin: scores[ranked[0]] - scores[ranked[1]] };
+      // split은 MIX 가설이 있으면 1위가 아니어도 그 분할 위치 (되돌리기로 MIX를 고른 뒤 학습할 때 쓴다)
+      return { label, text: texts[label], texts, scores, split: mixLp > -Infinity ? split : -1, margin: scores[ranked[0]] - scores[ranked[1]] };
     }
   }
 
-  const api = { compose, toKeys, isHangul, isSyllable, CharLM, WordModel, Classifier, LABELS };
+  const api = { compose, toKeys, isHangul, isSyllable, CharLM, WordModel, Classifier, LABELS, PARTICLES };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Hanyoung = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

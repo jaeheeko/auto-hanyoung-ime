@@ -76,6 +76,7 @@ button kbd { font-family: var(--mono); font-size: 12px; color: var(--muted); mar
 .grid3 h3 { margin: 0 0 6px; font-size: 16px; }
 .grid3 p { margin: 0; color: var(--muted); font-size: 14px; }
 code { font-family: var(--mono); font-size: .92em; background: var(--card); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+pre.cmd { font-family: var(--mono); font-size: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 table { border-collapse: collapse; width: 100%; font-size: 15px; }
 td, th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-weight: 600; color: var(--muted); font-size: 13px; }
@@ -97,7 +98,7 @@ a { color: var(--accent); }
   <div class="toolbar">
     <button id="undo" class="primary">틀렸어요, 되돌리기<kbd>Esc</kbd></button>
     <button id="clear">지우기</button>
-    <span style="color:var(--muted);font-size:13px">확정된 어절을 클릭해도 다른 언어로 바뀌고, 그 단어는 이 페이지 안에서 학습됩니다.</span>
+    <span style="color:var(--muted);font-size:13px">확정된 어절을 클릭해도 다른 언어로 바뀌고, 그 단어는 이 페이지 안에서 학습됩니다. 지우고 같은 키를 다시 쳐도 바뀝니다.</span>
   </div>
   <div class="examples" id="examples"></div>
   <p class="mobile-note">모바일에서는 물리 키보드가 없어 예시 재생으로 체험할 수 있습니다. 직접 치려면 데스크톱에서 열어 주세요.</p>
@@ -121,13 +122,20 @@ a { color: var(--accent); }
   <table>
     <tr><th>상황</th><th>한/영 키</th><th>뜻</th></tr>
     <tr><td>어절 중간</td><td>한 번</td><td>여기서 언어가 바뀐다. <code>SK</code> 톡 <code>플래닛</code> → SK플래닛</td></tr>
-    <tr><td>어절 사이</td><td>한 번</td><td>다음 어절은 반대 언어로 시작한다</td></tr>
+    <tr><td>어절 끝 또는 어절 사이</td><td>한 번</td><td>다음 어절은 방금 친 언어의 반대로 시작한다. 톡 뒤에 스페이스를 쳐도 유지되고, 그 한 어절에만 적용된다</td></tr>
     <tr><td>어절 사이</td><td>두 번</td><td>방금 어절을 다른 언어로. 연타하면 계속 돈다</td></tr>
     <tr><td>글자를 선택한 뒤</td><td>한 번</td><td>선택한 글자만 반대 언어로</td></tr>
   </table>
-  <p style="margin-top:14px">macOS 13 이상. <a href="https://github.com/jaeheeko/auto-hanyoung-ime/releases" target="_blank" rel="noopener">Releases</a>에서 zip을 받아 <code>~/Library/Input Methods/</code>에 넣거나, 소스를 받아 <code>./scripts/build.sh && ./scripts/install.sh</code>. 코드는 MIT, 자세한 설명은 <a href="https://github.com/jaeheeko/auto-hanyoung-ime" target="_blank" rel="noopener">GitHub</a>에.</p>
+  <p style="margin-top:14px"><b>지우고 다시 쳐도 됩니다.</b> 틀린 어절을 백스페이스로 지우고 같은 키를 다시 치면 다른 언어로 바뀝니다. 영어였다면 한국어로, 한국어였다면 영어로 먼저 바뀌고, 그대로 두고 다음 어절로 넘어가면 학습됩니다. 원래 판정이 아슬아슬했던 어절에만 적용됩니다.</p>
 
-  <p class="foot">이 체험판은 용량을 위해 가지치기한 모델(원본 26MB → 약 3MB 전송)을 쓰므로 실제 앱보다 정확도가 조금 낮습니다(테스트 분할 99.8% vs 99.86%, 개인화 시 99.97%). 입력한 내용은 어디에도 전송되지 않습니다. 모델: NSMC(CC0), KorNLI·KLUE YNAT·FrequencyWords·Stack Overflow 태그(CC BY-SA 4.0), GitHub Linguist(MIT).</p>
+  <h2>설치</h2>
+  <p>macOS 13 이상, Apple Silicon·Intel 모두. Claude Code, Codex, Gemini CLI처럼 터미널을 쓸 수 있는 AI에게 이 한 줄을 붙여 넣으면 설치까지 끝납니다.</p>
+  <pre class="cmd">https://raw.githubusercontent.com/jaeheeko/auto-hanyoung-ime/main/INSTALL.md 를 읽고 그대로 따라서 Auto HanYoung을 설치해 줘.</pre>
+  <p>직접 할 때는 터미널에서 이 한 줄을 실행합니다.</p>
+  <pre class="cmd">curl -fsSL https://raw.githubusercontent.com/jaeheeko/auto-hanyoung-ime/main/scripts/install-release.sh | bash</pre>
+  <p>코드는 MIT, 자세한 설명은 <a href="https://github.com/jaeheeko/auto-hanyoung-ime" target="_blank" rel="noopener">GitHub</a>에.</p>
+
+  <p class="foot">이 체험판은 용량을 위해 가지치기한 모델(원본 29MB → 약 2.2MB 전송)을 쓰므로 실제 앱보다 정확도가 조금 낮습니다(테스트 분할 99.83% vs 99.88%). 입력한 내용은 어디에도 전송되지 않습니다. 모델: NSMC(CC0), KorNLI·KLUE YNAT·FrequencyWords·Stack Overflow 태그(CC BY-SA 4.0), GitHub Linguist(MIT), 직접 고른 AI·광고·업무 약어 목록.</p>
 </main>
 <script>
 /*__HANYOUNG_JS__*/
@@ -139,6 +147,7 @@ a { color: var(--accent); }
   const MODEL_URL = new URLSearchParams(location.search).get("model")
     || (location.hostname === "jaeheeko.github.io" ? "model.json" : "https://jaeheeko.github.io/auto-hanyoung-ime/model.json");
   const HYSTERESIS = 1.5, DICT_WEIGHT = 10, DICT_MAX = 3;
+  const RETYPE_MARGIN = 10, RETYPE_WINDOW_MS = 20000;  // 앱의 retypeMargin, retypeWindow
   const LABEL_KO = { KO: "한국어", EN: "영어", MIX: "영어+조사" };
   const $ = (id) => document.getElementById(id);
   const editor = $("editor"), hint = $("hint"), status = $("status"), dot = $("dot");
@@ -151,7 +160,15 @@ a { color: var(--accent); }
   let displayed = null;  // 조합 중 어절의 표시 가설 (히스테리시스)
   let forced = null;     // 조합 중 Esc로 사용자가 고른 가설. 확정 때 이것만 모델보다 우선한다
   let prevLabel = "BR";
-  const userDict = {};   // keys → {label: count}
+  const userDict = Object.create(null);   // keys → {label: count}
+  // 지우고 다시 치기 (앱의 InputController와 같다)
+  let lastCommit = null;        // {keys, label, margin, at, piece}
+  let deletedAfterCommit = 0;   // 확정 뒤 백스페이스 수
+  let reverted = false;         // buffer가 확정 어절을 되돌린 것이고 아직 새 키를 안 쳤다
+  let retype = null;            // {keys, label, margin, tried}
+  let forcedByRetype = false;
+  let retypeTried = null;       // {keys, tried}
+  let pendingLearn = null;      // {keys, label, piece}: 다음 어절로 넘어갈 때 학습한다
 
   function bias(keys) {
     const b = {};
@@ -162,14 +179,14 @@ a { color: var(--accent); }
       const c = userDict[w].EN;
       if (c > 0 && keys.length > w.length && keys.startsWith(w)) {
         const tail = H.compose(keys.slice(w.length));
-        if (tail.lone === 0 && tail.shiftBad === 0) best = Math.max(best, c);
+        if (tail.lone === 0 && tail.shiftBad === 0 && H.PARTICLES.has(tail.text)) best = Math.max(best, c);
       }
     }
     if (best) b.MIX = (b.MIX || 0) + Math.min(best, DICT_MAX) * DICT_WEIGHT;
     return b;
   }
   function learn(keys, label, split) {
-    const e = userDict[keys] || (userDict[keys] = {});
+    const e = userDict[keys] || (userDict[keys] = Object.create(null));
     e[label] = (e[label] || 0) + 1;
     for (const o of H.LABELS) if (o !== label && e[o] > 0) e[o]--;
     clf.learn(keys, label, split);
@@ -181,26 +198,109 @@ a { color: var(--accent); }
   }
   const isWordKey = (ch) => /^[A-Za-z']$/.test(ch);
 
+  function resetEditState() {
+    pieces = []; buffer = ""; displayed = forced = null; prevLabel = "BR";
+    lastCommit = retype = retypeTried = pendingLearn = null;
+    deletedAfterCommit = 0; reverted = forcedByRetype = false;
+  }
+  function flushPendingLearn() {
+    if (pendingLearn && deletedAfterCommit === 0) {
+      learn(pendingLearn.keys, pendingLearn.label);
+      pendingLearn.piece.learned = true;
+    }
+    pendingLearn = null;
+  }
+  /** 직전 어절을 정확히 지우고 새 어절을 시작하면 재입력 후보로 잡는다. 구분 문자까지 지워야 한다. */
+  function startRetypeIfDeleted() {
+    const deleted = deletedAfterCommit;
+    deletedAfterCommit = 0;
+    if (deleted > 0) pendingLearn = null;
+    retype = null;
+    const lc = lastCommit;
+    if (!lc || Date.now() - lc.at >= RETYPE_WINDOW_MS || deleted !== lc.keys.length + 1) return;
+    const tried = retypeTried && retypeTried.keys === lc.keys ? retypeTried.tried : [lc.label];
+    retype = { keys: lc.keys, label: lc.label, margin: lc.margin, tried };
+  }
+  /** 영어 뒤에는 한국어, 한국어 뒤에는 영어를 먼저. 이미 보여 준 가설은 뒤로 미룬다. */
+  function nextValidLabel(d, keys, after, tried) {
+    const byScore = Object.keys(d.texts).sort((a, b) => d.scores[b] - d.scores[a]);
+    const preferred = after === "EN" ? ["KO", "MIX"] : after === "KO" ? ["EN", "MIX"] : byScore;
+    const candidates = preferred.filter((l) => {
+      if (l === after || d.texts[l] === undefined) return false;
+      if (l === "KO") { const c = H.compose(keys); if (c.lone > 0 || c.shiftBad > 0) return false; }
+      return true;
+    });
+    return candidates.find((l) => !tried.includes(l)) || candidates[0] || null;
+  }
+  function applyRetype() {
+    const r = retype;
+    if (!r) return;
+    if (buffer === r.keys) {
+      if (r.margin >= RETYPE_MARGIN) { retype = null; return; }
+      const next = nextValidLabel(decide(buffer, true), buffer, r.label, r.tried);
+      if (next) { forced = next; forcedByRetype = true; }
+    } else if (forcedByRetype) {
+      forced = null; forcedByRetype = false;
+      if (!r.keys.startsWith(buffer)) retype = null;
+    } else if (!r.keys.startsWith(buffer)) retype = null;
+  }
+
   function commit() {
     if (!buffer) return;
-    const d = decide(buffer, true);
+    const keys = buffer;
+    const d = decide(keys, true);
     const label = forced && d.texts[forced] !== undefined ? forced : d.label;
-    pieces.push({ kind: "word", keys: buffer, text: d.texts[label], label, texts: d.texts, model: d.label, margin: d.margin, split: d.split, learned: !!forced && forced !== d.label });
-    if (forced && forced !== d.label) learn(buffer, forced, d.split > 0 ? d.split : undefined);
+    if (pendingLearn && pendingLearn.keys !== keys) flushPendingLearn();
+    if (retypeTried && retypeTried.keys !== keys) retypeTried = null;
+    const byRetype = forcedByRetype && label === forced;
+    const correctedByKey = !byRetype && !!forced && forced !== d.label;
+    const piece = { kind: "word", keys, text: d.texts[label], label, texts: d.texts, model: d.label, margin: d.margin, split: d.split, learned: correctedByKey, retype: byRetype };
+    pieces.push(piece);
+    lastCommit = { keys, label, margin: byRetype ? 0 : d.margin, at: Date.now(), piece };
+    if (byRetype) {
+      pendingLearn = { keys, label, piece };
+      retypeTried = { keys, tried: (retype ? retype.tried : [label]).concat([label]) };
+    } else if (correctedByKey) learn(keys, forced, d.split > 0 ? d.split : undefined);
     prevLabel = label;
     buffer = ""; displayed = null; forced = null;
+    deletedAfterCommit = 0; reverted = false; retype = null; forcedByRetype = false;
   }
   function typeChar(ch) {
     if (!clf) return;
-    if (isWordKey(ch)) { buffer += ch; }
-    else { commit(); pieces.push({ kind: "sep", ch }); if (ch === "\n") prevLabel = "BR"; }
+    if (isWordKey(ch)) {
+      if (reverted && buffer) { lastCommit = retype = null; deletedAfterCommit = 0; pendingLearn = null; }
+      else if (!buffer) startRetypeIfDeleted();
+      reverted = false;
+      buffer += ch;
+      applyRetype();
+    } else {
+      if (buffer) commit();
+      else if (deletedAfterCommit > 0) { lastCommit = retype = pendingLearn = null; deletedAfterCommit = 0; reverted = false; }
+      pieces.push({ kind: "sep", ch });
+      if (ch === "\n") { flushPendingLearn(); lastCommit = null; prevLabel = "BR"; }
+    }
     render();
   }
   function backspace() {
-    if (buffer) buffer = buffer.slice(0, -1);
-    else if (pieces.length) {
+    if (buffer) {
+      buffer = buffer.slice(0, -1);
+      if (reverted) deletedAfterCommit++;
+      else applyRetype();
+      if (!buffer) { displayed = null; forced = null; forcedByRetype = false; }
+    } else if (pieces.length) {
       const last = pieces.pop();
-      if (last.kind === "word") { buffer = last.keys.slice(0, -1); displayed = last.label; forced = null; }
+      retype = null;
+      if (lastCommit) {
+        deletedAfterCommit++;
+        if (last.kind === "word" && last !== lastCommit.piece) { lastCommit = null; deletedAfterCommit = 0; }
+      }
+      if (last.kind === "word") {
+        if (pendingLearn && pendingLearn.piece === last) pendingLearn = null;
+        buffer = last.keys.slice(0, -1);
+        displayed = buffer ? last.label : null;
+        forced = null; forcedByRetype = false;
+        reverted = !!lastCommit;
+      }
       prevLabel = lastWordLabel();
     }
     render();
@@ -218,9 +318,13 @@ a { color: var(--accent); }
     const d = clf.decide(p.keys, "BR", null, true);
     p.scores = d.scores; p.texts = d.texts;
     const nl = nextLabel(p, p.label);
-    p.label = nl; p.text = d.texts[nl]; p.learned = true;
+    pendingLearn = null; retype = null; retypeTried = null; deletedAfterCommit = 0;
+    p.label = nl; p.text = d.texts[nl]; p.learned = true; p.retype = false;
     learn(p.keys, nl, d.split > 0 ? d.split : undefined);
-    if (idx === lastWordIndex()) prevLabel = nl;
+    if (idx === lastWordIndex()) {
+      prevLabel = nl;
+      lastCommit = { keys: p.keys, label: nl, margin: 0, at: Date.now(), piece: p };
+    }
     render();
   }
   function lastWordIndex() { for (let i = pieces.length - 1; i >= 0; i--) if (pieces[i].kind === "word") return i; return -1; }
@@ -231,6 +335,8 @@ a { color: var(--accent); }
       const avail = H.LABELS.filter((l) => d.texts[l] !== undefined).sort((a, b) => d.scores[b] - d.scores[a]);
       const cur = displayed || d.label;
       forced = displayed = avail[(avail.indexOf(cur) + 1) % avail.length];
+      forcedByRetype = false; retype = null;
+      if (reverted) { reverted = false; lastCommit = null; deletedAfterCommit = 0; }
       render();
       return;
     }
@@ -264,7 +370,7 @@ a { color: var(--accent); }
     // 어절 로그
     log.innerHTML = pieces.filter((p) => p.kind === "word").slice(-14).map((p) => {
       const i = pieces.indexOf(p);
-      return `<span class="chip ${p.label}" data-i="${i}"><b>${LABEL_KO[p.label]}</b>${esc(p.text)}<span class="lrn">${p.learned ? "학습됨" : "여유 " + p.margin.toFixed(1)}</span></span>`;
+      return `<span class="chip ${p.label}" data-i="${i}"><b>${LABEL_KO[p.label]}</b>${esc(p.text)}<span class="lrn">${p.learned ? "학습됨" : p.retype ? "다시 쳐서 바꿈" : "여유 " + p.margin.toFixed(1)}</span></span>`;
     }).join("");
   }
 
@@ -287,19 +393,20 @@ a { color: var(--accent); }
   });
   log.addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (c) cycle(+c.dataset.i); });
   $("undo").addEventListener("click", () => { undo(); editor.focus(); });
-  $("clear").addEventListener("click", () => { pieces = []; buffer = ""; displayed = forced = null; prevLabel = "BR"; render(); editor.focus(); });
+  $("clear").addEventListener("click", () => { resetEditState(); render(); editor.focus(); });
 
   // 예시 자동 타이핑
   const EXAMPLES = [  // 자연어로 적고 toKeys로 키열을 만든다
     "한글을 씁니다 hello Slack에서 봤어요",
     "오늘 standup은 skip할게요",
     "html, css, sql 다 쓰고 있어요",
+    "'사실'은 gpt에서 봤어요",
     "ㅋㅋㅋ 진짜 웹사이트가 확 바뀌었어요",
   ];
   let typing = null;
   function playExample(s) {
     if (typing) clearInterval(typing);
-    pieces = []; buffer = ""; displayed = forced = null; prevLabel = "BR"; render();
+    resetEditState(); render();
     editor.focus();
     const keys = Array.from(H.toKeys(s));
     let i = 0;

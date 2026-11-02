@@ -52,6 +52,8 @@ def main():
             "lone_penalty": p.lone_penalty, "shift_penalty": p.shift_penalty,
             "max_suffix": p.max_suffix, "min_prefix": p.min_prefix, "mix_penalty": p.mix_penalty,
             "suffix_lambda": p.suffix_lambda, "suffix_oov_penalty": p.suffix_oov_penalty,
+            "short_prefix_max_len": p.short_prefix_max_len, "short_prefix_min_count": p.short_prefix_min_count,
+            "short_prefix_penalty": p.short_prefix_penalty,
             "jamo_mass": p.jamo_mass, "run_attach_prob": p.run_attach_prob, "repeat_decay": p.repeat_decay,
             "jamo_lex": JAMO_LEXICON, "prior": p.prior,
         },
