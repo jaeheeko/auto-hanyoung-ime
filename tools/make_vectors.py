@@ -35,6 +35,8 @@ camelCase snakeCase PascalCase kebab Temasek Arns CJ KB SNS ID RQ Eh cor Wnt al
 """.split()
 MIXED = "Slack에서 API를 CJ올리브영 A군은 G마켓에서 standup은 skip할게요 Slack이 URL은 iPhone으로 Python으로는 SDK의 KB스타뱅킹".split()
 PREFIXES = "a r d dk dks dkss dkssu dkssud T Ekqhd hkkk mlml x zzr rntz 2qjs".split()
+# 따옴표가 섞인 어절(점수는 따옴표를 떼고, 렌더링은 그대로), 짧은 소문자 접두의 MIX 억제, 기술 약어
+RAW = "'tktlf' 'qlc'dmf dlf'dml 'gksrmf don't 'A' '' ' cotrhkdml tofh torj woafkdlqm apidptj gpt sha aos sns snsdptj tn".split()
 
 
 def mixed_keys(token: str) -> str:
@@ -50,7 +52,7 @@ def fmt(v):
 
 def main():
     keys_list = [to_keys(w) for w in KOREAN] + [to_keys(w) for w in JAMO] + ENGLISH \
-        + [mixed_keys(w) for w in MIXED] + PREFIXES + [""]
+        + [mixed_keys(w) for w in MIXED] + PREFIXES + RAW + [""]
     os.makedirs(OUT, exist_ok=True)
 
     with open(os.path.join(OUT, "automaton.tsv"), "w") as f:

@@ -137,6 +137,9 @@ public final class WordModel {
         return Double(base[h] ?? 0) + (overlay[h] ?? 0)
     }
 
+    /// 어휘 사전 빈도(기본 모델 + 개인 층·학습 덧층). 사전에 없으면 0.
+    public func lexCount(_ word: String) -> Double { count(word) }
+
     private func prob(_ word: String, eos: Bool) -> Double {
         let pNg = exp(lm.logprob(word, eos: eos))
         if !eos { return pNg }

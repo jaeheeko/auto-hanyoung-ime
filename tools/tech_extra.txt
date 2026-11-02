@@ -1,0 +1,38 @@
+# AI·광고·개발·업무에서 두루 쓰는 약어와 용어. 공개 빈도표(en_50k)와 Stack Overflow 태그 어디에도 없거나 너무 약한 것.
+# 공백으로 나눈 단어 목록. 단어 뒤에 숫자를 적으면 그 단어의 가중치, 없으면 classify.TECH_EXTRA_WEIGHT(30). 소문자로 적는다(대문자형은 대소문자 접기로 찾는다).
+# 회사·개인 고유어는 넣지 않는다. 한글 어절과 겹치는 키열(tls=신, dns=운)은 넣지 않는다.
+
+# AI
+ai llm gpt chatgpt claude gemini llama openai anthropic copilot cursor ollama whisper
+rag mcp agent agents prompt prompts prompting token tokens embedding embeddings transformer transformers
+finetune finetuning inference gpu gpus tpu cuda pytorch tensorflow keras sklearn numpy pandas jupyter colab
+huggingface langchain langgraph diffusion gan cnn rnn lstm bert nlp ocr asr tts stt mlops genai agentic
+
+# 개발
+api apis sdk cli gui ui ux ide repo repos git github gitlab bitbucket ci cd devops docker kubernetes helm terraform
+aws gcp azure lambda cloudfront cdn ssl ssh vpn vpc iam oauth sso jwt saml ldap
+http https rest grpc graphql websocket json yaml toml xml csv tsv md pdf png jpg jpeg svg webp mp4 zip tar gz
+sha md5 uuid guid utc iso crud orm sql nosql mysql postgres postgresql sqlite redis mongodb kafka rabbitmq elasticsearch
+athena bigquery redshift snowflake databricks spark hadoop airflow dbt etl elt olap oltp
+npm yarn pnpm pip venv conda brew homebrew bash zsh vim emacs vscode xcode android ios macos linux ubuntu debian
+swift kotlin java python js ts typescript javascript node nodejs react vue angular svelte nextjs nuxt django flask fastapi
+spring rails php ruby golang rust cpp csharp dotnet html css sass tailwind webpack vite babel eslint prettier jest pytest junit
+tdd bdd qa qc mvp poc prd rfc adr sla slo sli kpi okr roi tco
+localhost backend frontend fullstack middleware webhook webhooks endpoint endpoints payload schema schemas migration migrations
+deploy deployment rollback hotfix changelog readme license env config configs regex cron daemon runtime compiler linter
+async await callback promise promises mutex thread threads goroutine coroutine closure closures enum struct tuple
+boolean bool int float string array dict hashmap nullable optional generic generics typed untyped
+
+# 광고·마케팅
+ad ads adtech ctr cvr cpc cpm cpa cpi cpv cpl ecpm roas roi dsp ssp rtb mmp dau mau wau arpu arpdau ltv cac churn
+retention cohort cohorts funnel idfa gaid adid cid crid bidder bid bids impression impressions click clicks
+conversion conversions postback postbacks attribution rewarded interstitial banner banners native offerwall
+fillrate fill programmatic mediation waterfall placement placements creative creatives inventory publisher publishers
+advertiser advertisers campaign campaigns targeting retargeting frequency viewability brandsafety
+aos 10
+
+# 업무·조직
+ceo cto coo cfo cpo cmo cio ciso vp pm po bd hr pr ir ops biz b2b b2c saas paas iaas pmf
+wbr mbr qbr standup standups sprint sprints backlog epic epics jira confluence notion slack zoom figma linear asana trello loom
+onboarding offboarding roadmap milestone milestones stakeholder stakeholders deliverable deliverables okrs kpis
+sns url uri ip tcp udp wifi bluetooth nfc qr otp pin faq eta asap fyi btw imo tbd tbh wip lgtm

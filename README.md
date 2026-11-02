@@ -68,6 +68,8 @@ git clone https://github.com/jaeheeko/auto-hanyoung-ime.git && cd auto-hanyoung-
 
 고친 어절은 사용자 사전에 학습되어 조사가 붙은 변형과 대문자 변형에도 적용됩니다.
 
+따옴표는 어절의 일부로 그냥 칩니다. `'사실'`, `'빛'을`처럼 따옴표가 섞여도 판정은 따옴표를 뺀 글자로 하고 따옴표는 친 자리에 남습니다.
+
 ### 개인화 (선택)
 
 본인 노트·메시지·원고가 든 폴더로 어휘 사전을 만듭니다. 문서 내용은 저장되지 않고 어절 빈도만 남습니다. Python 3.10 이상, 표준 라이브러리만 씁니다.
@@ -89,4 +91,4 @@ python3 -I tools/personalize.py ~/Documents/notes
 
 ## 라이선스
 
-코드는 [MIT](LICENSE). 기본 모델은 [NSMC](https://github.com/e9t/nsmc)(CC0), [KorNLI](https://github.com/kakaobrain/kor-nlu-datasets)(CC BY-SA 4.0), [KLUE YNAT](https://github.com/KLUE-benchmark/KLUE)(CC BY-SA 4.0), [FrequencyWords](https://github.com/hermitdave/FrequencyWords)(CC BY-SA 4.0)의 어절 빈도에 [Stack Overflow 태그](https://api.stackexchange.com/)(CC BY-SA 4.0)와 [GitHub Linguist](https://github.com/github-linguist/linguist)(MIT)의 기술 어휘를 더해 만들어 CC BY-SA 4.0을 따릅니다. 틀리면 한 키로 되돌린다는 발상은 Punto Switcher에서 가져왔습니다.
+코드는 [MIT](LICENSE). 기본 모델은 [NSMC](https://github.com/e9t/nsmc)(CC0), [KorNLI](https://github.com/kakaobrain/kor-nlu-datasets)(CC BY-SA 4.0), [KLUE YNAT](https://github.com/KLUE-benchmark/KLUE)(CC BY-SA 4.0), [FrequencyWords](https://github.com/hermitdave/FrequencyWords)(CC BY-SA 4.0)의 어절 빈도에 [Stack Overflow 태그](https://api.stackexchange.com/)(CC BY-SA 4.0)와 [GitHub Linguist](https://github.com/github-linguist/linguist)(MIT)의 기술 어휘, 그리고 직접 고른 AI·광고·업무 약어 목록(`tools/tech_extra.txt`)을 더해 만들어 CC BY-SA 4.0을 따릅니다. 틀리면 한 키로 되돌린다는 발상은 Punto Switcher에서 가져왔습니다.

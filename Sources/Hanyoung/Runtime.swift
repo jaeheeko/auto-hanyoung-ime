@@ -73,17 +73,26 @@ final class UserDict {
         if let e = entries[keys] {
             for (l, c) in e { if let label = Label(rawValue: l) { d[label] = Double(min(c, maxCount)) * weight } }
         }
-        // 영어로 배운 단어 뒤에 한글로 조립되는 꼬리가 붙었으면(db→db에서) 영어+조사 가설에 같은 편향을 준다.
+        // 영어로 배운 단어 뒤에 조사가 붙었으면(db→db에서) 영어+조사 가설에 같은 편향을 준다.
         // 어휘 덧층만으로는 `유에서`처럼 진짜 한국어 어절과 겹치는 경우를 못 뒤집는다.
+        // 꼬리는 조사 목록에 있어야 한다. `to`를 영어로 한 번 배웠다고 `새로`·`새거`가 `to로`·`to거`가 되면 안 된다.
         var best = 0
         for (w, e) in entries where keys.count > w.count && keys.hasPrefix(w) {
             guard let c = e[Label.en.rawValue], c > 0 else { continue }
             let tail = Hangul.compose(String(keys.dropFirst(w.count)))
-            if tail.lone == 0 && tail.shiftBad == 0 { best = max(best, c) }
+            if tail.lone == 0 && tail.shiftBad == 0 && UserDict.particles.contains(tail.text) { best = max(best, c) }
         }
         if best > 0 { d[.mix, default: 0] += Double(min(best, maxCount)) * weight }
         return d
     }
+
+    /// 영어 단어 뒤에 붙는 조사·서술격 꼬리. 이 밖의 한글 꼬리는 영어+조사로 보지 않는다.
+    static let particles: Set<String> = Set("""
+    은 는 이 가 을 를 의 에 에서 로 으로 와 과 도 만 부터 까지 처럼 보다 께서 에게 한테 랑 이랑 라는 이라는 라고 이라고
+    로서 로써 으로서 으로써 마다 조차 밖에 뿐 대로 에서는 에는 에도 로는 으로는 로도 으로도 와는 과는 와도 과도
+    요 은요 는요 이요 이나 나 이란 란 이든 든 이며 며 하고 에게는 에게도 한테는 한테도 께 께는 로의 으로의 에서의 와의 과의
+    이라면 라면 이라서 라서 이라도 라도 이야 야 이고 고 인데 인 임 입니다 이다 였다 이었다 이지 지 이죠 죠 이네 네 이면 면
+    """.split(whereSeparator: { $0.isWhitespace }).map(String.init))
 
     func learn(_ keys: String, _ label: Label) {
         var e = entries[keys] ?? [:]

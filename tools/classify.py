@@ -40,6 +40,25 @@ JAMO_LEXICON = {
 JAMO_TOTAL = sum(JAMO_LEXICON.values())
 # 음절 뒤·앞에 반복돼 붙는 자모 (ㅋ ㅎ ㅠ ㅜ). ㅡ(m)는 "10mm" 같은 단위와 충돌해 제외.
 EMOTICON_RUN_KEYS = set("zgbn")
+# 어절 안의 따옴표. 점수를 매길 때는 떼고 보고, 렌더링에는 그대로 남긴다.
+# 한국어·영어 문자 모델 모두 따옴표를 모르는 글자로 취급해 '사실'이 영어로 뒤집히던 것을 막는다.
+QUOTES = "'\""
+
+
+def strip_quotes(keys: str) -> str:
+    return "".join(c for c in keys if c not in QUOTES)
+
+
+def unstrip_index(keys: str, split: int) -> int:
+    """따옴표를 뗀 키열의 분할점을 원래 키열의 인덱스로. 분할점 바로 뒤의 따옴표는 접두에 붙인다 ('빛'을)."""
+    cnt = j = 0
+    while j < len(keys) and cnt < split:
+        if keys[j] not in QUOTES:
+            cnt += 1
+        j += 1
+    while j < len(keys) - 1 and keys[j] in QUOTES:
+        j += 1
+    return j
 
 
 def collapse_runs(keys: str):
@@ -85,6 +104,11 @@ class Params:
     lex_lambda_en: float = 0.5
     suffix_lambda: float = 0.7       # 접미 n-gram 비중, 나머지는 일반 KO n-gram
     suffix_oov_penalty: float = 8.0  # 접미에 조사·어미 사전(2회 이상)에 없는 음절이 있으면 벌점 (h싀, i홋 억제)
+    # 소문자 접두의 MIX 억제(cot과의, cof시네, coftl네): 영어 사전에 없는 2글자 이상 소문자 접두는 max_len 이하면 MIX
+    # 후보에서 빼고 더 길면 벌점, 사전에 있어도 max_len 이하·빈도 min_count 미만이면 벌점. 1글자·대문자 접두는 그대로.
+    short_prefix_max_len: int = 3
+    short_prefix_min_count: float = 5.0
+    short_prefix_penalty: float = 8.0
     dict_weight: float = 0.2         # /usr/share/dict/words 단어 1개의 학습 가중치
     jamo_mass: float = 0.01          # 전체 어절 중 자모 관용 표현(ㅋㅋ 등)의 비중
     run_attach_prob: float = 0.02    # 음절에 반복 자모(굿ㅋㅋ)가 붙을 확률
@@ -97,7 +121,7 @@ class Params:
 class Decision:
     label: str
     text: str            # 선택된 가설로 렌더링한 문자열
-    split: int           # MIX일 때 분할 위치, 아니면 -1
+    split: int           # MIX 가설의 분할 위치(가설이 있으면), 없으면 -1
     scores: dict         # label -> 최고 점수
     margin: float        # 1위 - 2위
 
@@ -210,22 +234,45 @@ class Classifier:
         n = len(keys)
         for i in range(max(self.p.min_prefix, n - self.p.max_suffix), n):
             prefix, suffix = keys[:i], keys[i:]
-            if not prefix.replace("'", "").isalpha():
+            letters = strip_quotes(prefix)
+            if not letters.isalpha():
                 continue
+            penalty = self.p.mix_penalty
+            if letters.islower() and len(letters) >= 2:  # 1글자 접두(r이, x축)는 사전으로 가릴 수 없어 그대로 둔다
+                c = self.en.lex.get(letters, 0)
+                short = len(letters) <= self.p.short_prefix_max_len
+                if c <= 0 and short:
+                    continue
+                if c <= 0 or (short and c < self.p.short_prefix_min_count):
+                    penalty += self.p.short_prefix_penalty
             s_lp, s_text = self.suffix_loglik(suffix, final)
             if s_lp == -math.inf:
                 continue
             # 영어 접두는 완성된 단어이므로 항상 EOS 포함
-            lp = self.en.logprob(prefix) + s_lp - self.p.mix_penalty
+            lp = self.en.logprob(prefix) + s_lp - penalty
             if lp > best[0]:
                 best = (lp, prefix + s_text, i)
         return best
 
     def decide(self, keys: str, prev: str = "BR", app_bias: dict = None, final: bool = True) -> Decision:
         prior = self.p.prior.get(prev) or self.p.prior.get("BR") or {}
-        ko_lp, ko_text = self.ko_loglik(keys, final)
-        en_lp, en_text = self.en_loglik(keys, final)
-        mix_lp, mix_text, split = self.mix_loglik(keys, final)
+        stripped = strip_quotes(keys)
+        if stripped and len(stripped) != len(keys):
+            # 따옴표는 점수에서 빼고 렌더링에만 남긴다
+            ko_lp, _ = self.ko_loglik(stripped, final)
+            ko_text = compose(keys)[0]
+            en_lp = max(self.en.logprob(keys, eos=final), self.en.logprob(stripped, eos=final))
+            en_text = keys
+            mix_lp, _, split = self.mix_loglik(stripped, final)
+            if split > 0:
+                split = unstrip_index(keys, split)
+                mix_text = keys[:split] + compose(keys[split:])[0]
+            else:
+                mix_text = ""
+        else:
+            ko_lp, ko_text = self.ko_loglik(keys, final)
+            en_lp, en_text = self.en_loglik(keys, final)
+            mix_lp, mix_text, split = self.mix_loglik(keys, final)
         scores = {
             "KO": ko_lp + prior.get("KO", 0.0),
             "EN": en_lp + prior.get("EN", 0.0),
@@ -238,7 +285,8 @@ class Classifier:
         label = ranked[0][0]
         text = {"KO": ko_text, "EN": en_text, "MIX": mix_text}[label]
         margin = ranked[0][1] - ranked[1][1]
-        return Decision(label, text, split if label == "MIX" else -1, scores, margin)
+        # split은 MIX 가설이 있으면 그 분할 위치(1위가 아니어도). 되돌리기로 MIX를 고른 뒤 학습할 때 쓴다.
+        return Decision(label, text, split if mix_lp > -math.inf else -1, scores, margin)
 
 
 # --- 학습 ---
@@ -280,6 +328,29 @@ def load_en_frequency(path):
             parts = line.split()
             if len(parts) == 2 and parts[0].isalpha():
                 lex[parts[0]] += float(parts[1])
+    return lex
+
+
+TECH_EXTRA_WEIGHT = 30.0
+
+
+def load_tech_extra(path=os.path.join(os.path.dirname(__file__), "tech_extra.txt")):
+    """공백으로 나눈 단어 목록. 단어 뒤에 숫자가 오면 그 단어의 가중치, 없으면 TECH_EXTRA_WEIGHT. `#` 뒤는 주석."""
+    lex = Counter()
+    if not os.path.exists(path):
+        return lex
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            last = None
+            for tok in line.split("#")[0].split():
+                if tok.isalpha():
+                    lex[tok] += TECH_EXTRA_WEIGHT
+                    last = tok
+                elif last is not None:
+                    try:
+                        lex[last] += float(tok) - TECH_EXTRA_WEIGHT
+                    except ValueError:
+                        pass  # mp4 같은 숫자 섞인 토큰은 어절 글자가 아니라 건너뛴다
     return lex
 
 
@@ -333,6 +404,9 @@ def train(train_rows, external_dir, order=5, params: Params = None, prior="estim
         en_lex[w] += params.dict_weight
     # 기술 어휘(tools/tech_lexicon.py): 자막 빈도표에 없는 html, sql, sdk 같은 약어
     for w, c in load_en_frequency(os.path.join(external_dir, "tech_words.txt")).items():
+        en_lex[w] += c
+    # 큐레이션 약어(tools/tech_extra.txt): 태그·빈도표 어디에도 없는 gpt, roas, aos 같은 AI·광고·업무 일반 약어
+    for w, c in load_tech_extra().items():
         en_lex[w] += c
     en_lm = CharLM(order)
     en_lm.train(list(en_lex.keys()), weights=list(en_lex.values()))

@@ -24,6 +24,11 @@ public struct Params {
     public var suffixLambda = 0.7
     /// 접미에 조사·어미 사전(2회 이상)에 없는 음절이 있으면 벌점 (h싀, i홋 억제)
     public var suffixOOVPenalty = 8.0
+    /// 소문자 접두의 MIX 억제(cot과의, cof시네, coftl네): 영어 사전에 없는 2글자 이상 소문자 접두는 maxLen 이하면 MIX
+    /// 후보에서 빼고 더 길면 벌점, 사전에 있어도 maxLen 이하·빈도 minCount 미만이면 벌점. 1글자·대문자 접두는 그대로.
+    public var shortPrefixMaxLen = 3
+    public var shortPrefixMinCount = 5.0
+    public var shortPrefixPenalty = 8.0
     /// 자모 관용 표현(ㅋㅋ 등): 전체 어절 중 비중, 음절에 반복 자모가 붙을 확률, 3개째부터 글자당 비용
     public var jamoMass = 0.01
     public var runAttachProb = 0.02
@@ -38,7 +43,7 @@ public struct Decision {
     public let label: Label
     public let texts: [Label: String]     // 가설별 렌더링 (MIX가 불가능하면 없음)
     public let scores: [Label: Double]
-    public let split: Int                 // MIX 분할 위치, 아니면 -1
+    public let split: Int                 // MIX 가설의 분할 위치(가설이 있으면, 1위가 아니어도), 없으면 -1
     public let margin: Double             // 1위 - 2위
 
     public var text: String { texts[label]! }
@@ -58,6 +63,22 @@ public final class Classifier {
 
     /// 음절 뒤·앞에 반복돼 붙는 자모 (ㅋ ㅎ ㅠ ㅜ)
     static let emoticonRunKeys: Set<Character> = Set("zgbn")
+    /// 어절 안의 따옴표. 점수를 매길 때는 떼고 보고, 렌더링에는 그대로 남긴다.
+    /// 두 문자 모델 모두 따옴표를 모르는 글자로 취급해 '사실'이 영어로 뒤집히던 것을 막는다.
+    static let quotes: Set<Character> = ["'", "\""]
+
+    static func stripQuotes(_ keys: String) -> String { keys.filter { !quotes.contains($0) } }
+
+    /// 따옴표를 뗀 키열의 분할점을 원래 키열의 인덱스로. 분할점 바로 뒤의 따옴표는 접두에 붙인다 ('빛'을).
+    static func unstripIndex(_ keys: [Character], _ split: Int) -> Int {
+        var cnt = 0, j = 0
+        while j < keys.count && cnt < split {
+            if !quotes.contains(keys[j]) { cnt += 1 }
+            j += 1
+        }
+        while j < keys.count - 1 && quotes.contains(keys[j]) { j += 1 }
+        return j
+    }
 
     init(ko: WordModel, en: WordModel, suffixCounts: [String: Double], params: Params) {
         self.ko = ko
@@ -103,8 +124,8 @@ public final class Classifier {
         case .ko:
             ko.addCounts([Classifier.canon(keys): weight])
         case .mix:
-            let i = split ?? mixLoglik(keys, final: true).2
-            if i > 0 { en.addCounts([String(keys.prefix(i)): weight]) }
+            let i = split ?? decide(keys).split
+            if i > 0 { en.addCounts([Classifier.stripQuotes(String(keys.prefix(i))): weight]) }
         }
     }
 
@@ -215,12 +236,19 @@ public final class Classifier {
         if start >= n { return best }
         for i in start..<n {
             let prefix = String(chars[0..<i]), suffix = String(chars[i...])
-            let letters = prefix.filter { $0 != "'" }
+            let letters = Classifier.stripQuotes(prefix)
             guard !letters.isEmpty, letters.allSatisfy({ $0.isLetter }) else { continue }
+            var penalty = params.mixPenalty
+            if letters.count >= 2, letters.allSatisfy({ $0.isLowercase }) {  // 1글자 접두(r이, x축)는 그대로
+                let c = en.lexCount(letters)
+                let short = letters.count <= params.shortPrefixMaxLen
+                if c <= 0 && short { continue }
+                if c <= 0 || (short && c < params.shortPrefixMinCount) { penalty += params.shortPrefixPenalty }
+            }
             let (sLp, sText) = suffixLoglik(suffix, final: final)
             if sLp == -.infinity { continue }
             // 영어 접두는 완성된 단어이므로 항상 EOS 포함
-            let lp = en.logprob(prefix) + sLp - params.mixPenalty
+            let lp = en.logprob(prefix) + sLp - penalty
             if lp > best.0 { best = (lp, prefix + sText, i) }
         }
         return best
@@ -228,9 +256,29 @@ public final class Classifier {
 
     public func decide(_ keys: String, prev: String = "BR", bias: [Label: Double] = [:], final: Bool = true) -> Decision {
         let prior = params.prior[prev] ?? params.prior["BR"] ?? [:]
-        let (koLp, koText) = koLoglik(keys, final: final)
-        let (enLp, enText) = enLoglik(keys, final: final)
-        let (mixLp, mixText, split) = mixLoglik(keys, final: final)
+        let koLp: Double, koText: String, enLp: Double, enText: String, mixLp: Double, mixText: String, split: Int
+        let stripped = Classifier.stripQuotes(keys)
+        if !stripped.isEmpty && stripped.count != keys.count {
+            // 따옴표는 점수에서 빼고 렌더링에만 남긴다
+            koLp = koLoglik(stripped, final: final).0
+            koText = Hangul.compose(keys).text
+            enLp = max(en.logprob(keys, eos: final), en.logprob(stripped, eos: final))
+            enText = keys
+            let m = mixLoglik(stripped, final: final)
+            mixLp = m.0
+            if m.2 > 0 {
+                let chars = Array(keys)
+                split = Classifier.unstripIndex(chars, m.2)
+                mixText = String(chars[0..<split]) + Hangul.compose(String(chars[split...])).text
+            } else {
+                split = -1
+                mixText = ""
+            }
+        } else {
+            (koLp, koText) = koLoglik(keys, final: final)
+            (enLp, enText) = enLoglik(keys, final: final)
+            (mixLp, mixText, split) = mixLoglik(keys, final: final)
+        }
         var scores: [Label: Double] = [
             .ko: koLp + (prior[.ko] ?? 0),
             .en: enLp + (prior[.en] ?? 0),
@@ -241,7 +289,7 @@ public final class Classifier {
         var texts: [Label: String] = [.ko: koText, .en: enText]
         if mixLp > -.infinity { texts[.mix] = mixText }
         return Decision(label: ranked[0], texts: texts, scores: scores,
-                        split: ranked[0] == .mix ? split : -1,
+                        split: mixLp > -.infinity ? split : -1,
                         margin: scores[ranked[0]]! - scores[ranked[1]]!)
     }
 }
