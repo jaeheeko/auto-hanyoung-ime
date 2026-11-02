@@ -428,7 +428,7 @@ a { color: var(--accent); }
   (async function load() {
     try {
       const t0 = performance.now();
-      const res = await fetch(MODEL_URL, { cache: "force-cache" });
+      const res = await fetch(MODEL_URL);  // force-cache를 쓰면 재방문자가 옛 모델에 묶인다. ETag로 재검증한다
       if (!res.ok) throw new Error("HTTP " + res.status);
       const reader = res.body.getReader();
       const chunks = []; let got = 0;
