@@ -5,7 +5,8 @@ import Engine
 /// 되돌리기(한/영) 키의 뜻은 상황에 따라 다르다. 한/영 키를 언어가 바뀌는 자리마다 누르던 습관과 충돌하지 않게 한다.
 ///   어절 중간에서 한 번     → 여기서 언어가 바뀐다. 앞부분은 보이는 대로 고정, 뒤는 반대 언어
 ///   어절 끝에서 한 번        → 다음 어절은 반대 언어로 시작한다. 스페이스를 쳐도 힌트가 다음 어절까지 이어진다
-///   어절 사이(빈 상태) 한 번 → 다음 어절은 반대 언어로 시작한다
+///   어절 사이(빈 상태) 한 번 → 다음 어절은 마지막으로 치거나 지운 글자와 반대 언어로 시작한다
+///   "반대"의 기준은 마지막으로 치거나 지운 글자의 언어다(`lastTail`). 지운 뒤 누르면 지운 글자가 기준이다.
 ///   어느 쪽이든 한 번 톡은 커서 옆에 A/한 말풍선으로 잠깐 보인다. 힌트는 다음 한 어절에만 적용된다.
 ///   빈 상태에서 두 번 연타  → 커서 앞(또는 커서가 닿은) 어절을 다음 가설로
 ///   선택 영역이 있을 때     → 선택한 글자를 반대 언어로
@@ -23,7 +24,7 @@ public final class HanyoungInputController: IMKInputController {
     private var tappedAtEnd = false               // 어절 중간 톡 뒤 아무것도 안 친 상태. 이대로 확정되면 톡의 뜻이 다음 어절로 넘어간다
     private var pendingAllowed: Set<Label>? = nil // 빈 상태에서 톡: 다음 어절이 시작할 언어
     private var prevLabel: Label? = nil           // 직전 어절 라벨 (문맥 사전확률)
-    private var lastTail: Label = .ko             // 마지막 어절이 끝난 언어. 한/영 힌트의 기준
+    private var lastTail: Label = .ko             // 마지막으로 치거나 지운 글자의 언어. 한/영 힌트의 기준
     private var lastCommit: (text: String, keys: String, label: Label, margin: Double)? = nil
     private var lastCommitAt = Date.distantPast
     private var deletedAfterCommit = 0            // 빈 상태에서 백스페이스로 지운 글자 수. 직전 어절을 정확히 지웠는지 본다
@@ -92,6 +93,7 @@ public final class HanyoungInputController: IMKInputController {
         if flags.contains(.command) || flags.contains(.control) || flags.contains(.option) {
             commit(client)
             pendingAllowed = nil
+            if event.keyCode == 51 { noteDeletedLanguage(client) }
             if event.keyCode == 51, flags == [.option], let lc = lastCommit, endsWithLastCommit(client, lc.text) {
                 deletedAfterCommit = (lc.text as NSString).length + 1   // ⌥⌫는 앞 어절(과 공백)을 지운다
             } else {
@@ -106,6 +108,8 @@ public final class HanyoungInputController: IMKInputController {
             tappedAtEnd = false
             if !buffer.isEmpty {
                 buffer.removeLast()
+                // 조합 중인 어절을 다 지웠으면 지운 글자(보이던 가설)의 언어가 다음 한/영 키의 기준이다
+                if buffer.isEmpty, fixed.isEmpty, let shown = displayed { lastTail = Self.tail(shown) }
             } else if let last = fixed.popLast() {
                 // 가른 구간 안으로 지워 들어간다: 그 구간을 다시 조합 중으로 되돌린다
                 buffer = Array(last.keys)
@@ -116,6 +120,7 @@ public final class HanyoungInputController: IMKInputController {
                 deletedAfterCommit += 1
                 if let lc = lastCommit, deletedAfterCommit > (lc.text as NSString).length + 1 { lastCommit = nil }
                 pendingAllowed = nil
+                noteDeletedLanguage(client)
                 return false
             }
             applyRetype(client)
@@ -153,12 +158,14 @@ public final class HanyoungInputController: IMKInputController {
         if Self.isWordChar(ch) {
             if buffer.isEmpty, fixed.isEmpty, let p = pendingAllowed {
                 forcedByHint = true
-                // 한/영 힌트가 걸려 있으면 새 어절은 그 언어로 시작한다
+                // 한/영 힌트가 걸려 있으면 새 어절은 그 언어로 시작한다. 사용자가 직접 고른 언어라 재입력 추측보다 앞선다.
                 forced = p
                 pendingAllowed = nil
                 HintBubble.shared.hide()
-            }
-            if buffer.isEmpty, fixed.isEmpty { startRetypeIfDeleted() }
+                if deletedAfterCommit > 0 { pendingLearn = nil }
+                deletedAfterCommit = 0
+                retype = nil
+            } else if buffer.isEmpty, fixed.isEmpty { startRetypeIfDeleted() }
             tappedAtEnd = false
             buffer.append(ch)
             applyRetype(client)
@@ -223,6 +230,25 @@ public final class HanyoungInputController: IMKInputController {
     }
 
     private static func tail(_ label: Label) -> Label { label == .mix ? .ko : label }
+
+    /// 확정된 글자를 지우기 직전에 부른다. 커서 앞 글자(공백·문장부호는 건너뜀)의 언어를 다음 한/영 키의 기준으로 삼는다.
+    /// 앱이 주변 글자를 알려 주지 않으면 기준을 그대로 둔다.
+    private func noteDeletedLanguage(_ client: IMKTextInput) {
+        let sel = client.selectedRange()
+        guard sel.location != NSNotFound, sel.location > 0 else { return }
+        let n = min(sel.location, 16)
+        guard let before = client.attributedSubstring(from: NSRange(location: sel.location - n, length: n))?.string else { return }
+        for ch in before.reversed() {
+            if let l = Self.language(of: ch) { lastTail = l; return }
+        }
+    }
+
+    private static func language(of ch: Character) -> Label? {
+        guard let u = ch.unicodeScalars.first?.value else { return nil }
+        if (0xAC00...0xD7A3).contains(u) || (0x3131...0x318E).contains(u) || (0x1100...0x11FF).contains(u) { return .ko }
+        if ch.isASCII, ch.isLetter { return .en }
+        return nil
+    }
 
     // MARK: - 조합 표시
 
